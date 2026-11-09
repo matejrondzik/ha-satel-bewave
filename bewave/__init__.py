@@ -136,7 +136,16 @@ class BeWaveHub:
                         _LOGGER.info("BE WAVE: stale session, reconnecting")
                         self._reconnect()
                 return {"state": self.state}
-            except Exception as err:
+            except Exception as err:  # noqa: BLE001
+                # One immediate reconnect before reporting a failure, so a session the
+                # hub dropped (e.g. when the phone app connects) does not flap entities.
+                try:
+                    self._reconnect()
+                    msgs = self.conn.read_messages(1.5)
+                    self._update_from(msgs)
+                    return {"state": self.state}
+                except Exception:  # noqa: BLE001
+                    pass
                 try:
                     if self.conn: self.conn.close()
                 finally:
