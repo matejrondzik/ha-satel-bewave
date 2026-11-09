@@ -36,6 +36,49 @@ class BeWaveHub:
                      "network": None, "firmware": None}
         self.dev_names: dict[int, dict] = {}   # config: name/room/model/sysnum/bypass
         self.dev_state: dict[int, dict] = {}   # live telemetry
+        self.on_update = None                  # set by setup: push new data to HA
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    # ---- keepalive (HYBRID closes idle sessions after ~2.7 s) ----
+    def start_keepalive(self):
+        self._thread = threading.Thread(target=self._keepalive_loop,
+                                        name="bewave-keepalive", daemon=True)
+        self._thread.start()
+
+    def stop_keepalive(self):
+        self._stop.set()
+
+    def _snapshot(self):
+        return (self.state, repr(sorted(self.dev_state.items())), repr(self.flags))
+
+    def _keepalive_loop(self):
+        while not self._stop.is_set():
+            changed = False
+            # never wait for a long poll/command; they keep the session alive too
+            if self._lock.acquire(timeout=0.2):
+                try:
+                    if self.conn is not None:
+                        before = self._snapshot()
+                        try:
+                            self.conn.refresh()
+                            msgs = self.conn.read_messages(0.3)
+                        except Exception as err:  # noqa: BLE001
+                            _LOGGER.debug("BE WAVE keepalive: session lost: %s", err)
+                            try:
+                                self.conn.close()
+                            finally:
+                                self.conn = None
+                        else:
+                            if msgs:
+                                self._empty = 0
+                                self._update_from(msgs)
+                                changed = self._snapshot() != before
+                finally:
+                    self._lock.release()
+            if changed and self.on_update:
+                self.on_update()
+            self._stop.wait(proto.KEEPALIVE_S - 0.3)
 
     def _ensure(self):
         if self.conn is not None:
@@ -209,6 +252,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     await coordinator.async_config_entry_first_refresh()
 
+    def _push():
+        hass.loop.call_soon_threadsafe(
+            coordinator.async_set_updated_data, {"state": hub.state})
+    hub.on_update = _push
+    hub.start_keepalive()
+
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"hub": hub, "coordinator": coordinator}
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
@@ -223,6 +272,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if ok:
         data = hass.data[DOMAIN].pop(entry.entry_id)
         hub: BeWaveHub = data["hub"]
+        hub.stop_keepalive()
         if hub.conn:
             await hass.async_add_executor_job(hub.conn.close)
     return ok

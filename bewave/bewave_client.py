@@ -39,7 +39,11 @@ ALARM_ARMED_FIELD = 20
 # Site-setting toggles. Command is a FLIP: f34{f1{f1=id, f2{f3:{}}}}.
 SETTING_IDS = {"led": 5, "grade2": 12, "satel": 11}
 # device category by telemetry field f10
-DEV_TYPES = {0x10002: "keyfob", 0x10003: "motion", 0x10007: "contact"}
+DEV_TYPES = {0x10002: "keyfob", 0x10003: "motion", 0x10007: "contact",
+             # HYBRID 128 (fw 1.05) wired BUS detectors reported as these types
+             0x1004F: "motion", 0x10051: "motion"}
+# HYBRID drops a session after ~2.7 s without traffic; refresh well below that.
+KEEPALIVE_S = 1.0
 # device model by config field f2 (verified from the app)
 DEV_MODELS = {11: "APD-200", 26: "APT-210", 42: "AXD-200 Lite"}
 
@@ -93,7 +97,12 @@ def _f32(v):
     try: return round(struct.unpack('<f', struct.pack('<I', v))[0], 2)
     except Exception: return None
 def _s(v):
-    return v.decode('latin1') if isinstance(v, (bytes, bytearray)) else (v or "")
+    if isinstance(v, (bytes, bytearray)):
+        try:
+            return v.decode('utf-8')
+        except UnicodeDecodeError:
+            return v.decode('latin1')
+    return v or ""
 def find_varint(buf, target, depth=0):
     res = []; i = 0
     while i < len(buf):
@@ -269,6 +278,10 @@ class BeWaveClient:
         self.serial = None
         self.session_id = None
         self.session_secret = None
+        # user/device ids are assigned by the hub (sign-in response header f3/f4);
+        # Smart HUB demo happened to use 2/4, HYBRID assigns its own device id.
+        self.user_id = 2
+        self.device_id = 4
         self._counter = 0
         self.K_signin = md5(password) * 2
         self.A_signin = login.encode()
@@ -285,7 +298,7 @@ class BeWaveClient:
         if not self.session_id:
             raise BeWaveError("not signed in")
         return build_message(self.next_counter(), plaintext, self.uuid.encode(),
-                             md5(self.session_id))
+                             md5(self.session_id), self.user_id, self.device_id)
     def subscribe_plaintext(self, field): return pb_bytes(field, pb_bytes(1, b""))
     def register_plaintext(self):
         return pb_bytes(8, pb_bytes(1, pb_bytes(1, self.token.encode()) + pb_varint(2, 1)))
@@ -340,8 +353,12 @@ class LocalConnection:
         deadline = time.time() + self.timeout; signed = False
         while time.time() < deadline and not signed:
             self._pump()
-            for _fd, pt in self._drain():
+            for fd, pt in self._drain():
                 if pt and len(pt) > 200 and self.client.ingest_response(pt):
+                    if isinstance(fd.get(3), int):
+                        self.client.user_id = fd[3]
+                    if isinstance(fd.get(4), int):
+                        self.client.device_id = fd[4]
                     signed = True; break
         if not signed:
             raise BeWaveError("sign-in response not received/decrypted")
@@ -355,8 +372,13 @@ class LocalConnection:
         # capture the hub's initial config (f45) + per-device telemetry (f89) burst,
         # which is pushed once right after subscribing. The standalone app catches it
         # via its continuous reader; here we read a few seconds so the first poll parses it.
-        t0 = time.time()
+        # Short socket timeout from now on so readers never block past the hub's
+        # idle limit; keep the session alive with refreshes while we wait.
+        self.sock.settimeout(0.5)
+        t0 = last = time.time()
         while time.time() - t0 < 3.5:
+            if time.time() - last >= KEEPALIVE_S:
+                self.refresh(); last = time.time()
             self._pump()
         return True
 
