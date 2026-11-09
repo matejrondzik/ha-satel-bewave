@@ -49,7 +49,6 @@ class BeWaveBinary(CoordinatorEntity, BinarySensorEntity):
             identifiers={(DOMAIN, f"{serial}_{devid}")},
             manufacturer="Satel", model=d.get("model"),
             name=d.get("name") or f"BE WAVE {devid}",
-            via_device=(DOMAIN, serial),
         )
 
     def _dev(self):
