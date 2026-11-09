@@ -42,6 +42,9 @@ SETTING_IDS = {"led": 5, "grade2": 12, "satel": 11}
 DEV_TYPES = {0x10002: "keyfob", 0x10003: "motion", 0x10007: "contact",
              # HYBRID 128 (fw 1.05) wired BUS detectors reported as these types
              0x1004F: "motion", 0x10051: "motion"}
+# HubDeviceType values (config f2) and HubDeviceState_Settings_Command values
+VIRTUAL_IP_DEVICE = 69
+SET_ON_OFF = 1
 # HYBRID drops a session after ~2.7 s without traffic; refresh well below that.
 KEEPALIVE_S = 1.0
 # device model by config field f2 (verified from the app)
@@ -185,6 +188,8 @@ def _telem_from_block(f3block, f2list):
     return {"signal": f3.get(3, [None])[0], "battery": f3.get(4, [None])[0],
             "state": f3.get(9, [None])[0], "armed": f3.get(20, [None])[0],
             "type": f3.get(10, [None])[0], "temp": temp,
+            # HubDeviceState.Settings.onOff (f5); proto3 omits 0 -> off when block present
+            "on_off": (f3.get(5, [0])[0] == 1) if f3 else None,
             "volt": _f32(f3[110][0]) if 110 in f3 else None}
 
 def parse_telemetry(plaintext):
@@ -224,6 +229,8 @@ def parse_config_devices(plaintext):
             out[devid] = {"name": _s(dd.get(9, [b''])[0]), "room": rname,
                           "type": tel.get("type"),
                           "model": DEV_MODELS.get(dd.get(2, [None])[0]),
+                          "hwtype": dd.get(2, [None])[0],
+                          "on_off": tel.get("on_off"),
                           "sysnum": dd.get(21, [None])[0],
                           "bypass": bool(dd.get(22, [0])[0]),
                           "signal": tel.get("signal"), "battery": tel.get("battery"),
@@ -291,7 +298,12 @@ class BeWaveClient:
         self._counter += 1
         return self._counter
     def signin_message(self):
-        inner = pb_bytes(2, self.uuid.encode()) + pb_bytes(3, (self.serial or "").encode())
+        # Sign in like the Be Wave app: credentials + deviceToken + hubLocalIdentifier.
+        # A device token first registered WITH credentials gets full device control
+        # (DeviceStateUpdate); one registered token-only is silently read-only there.
+        creds = pb_bytes(2, self.login.encode()) + pb_bytes(3, self.password.encode())
+        inner = (pb_bytes(1, creds) + pb_bytes(2, self.uuid.encode())
+                 + pb_bytes(3, (self.serial or "").encode()))
         return build_message(self.next_counter(), pb_bytes(6, pb_bytes(1, inner)),
                              self.K_signin, self.A_signin, with_ids=False)
     def command_message(self, plaintext):
@@ -305,6 +317,15 @@ class BeWaveClient:
     def arm_disarm_plaintext(self, arm, mode="defau"):
         inner = pb_bytes(1, mode.encode()) + pb_varint(2, 1 if arm else 0)
         return pb_bytes(94, pb_bytes(1, pb_bytes(1, inner)))
+    def set_on_off_plaintext(self, devid, on):
+        """DeviceStateUpdate (f66) -> payload.patches[{deviceId{uuid}, type=SET_ON_OFF, boolean}]."""
+        patch = (pb_bytes(1, pb_varint(1, devid)) + pb_varint(2, SET_ON_OFF)
+                 + pb_varint(10, 1 if on else 0))
+        return pb_bytes(66, pb_bytes(1, pb_bytes(1, patch)))
+    def set_name_plaintext(self, name):
+        """AccountSetMobileDeviceName (f126) so the device is recognisable in the app."""
+        pl = pb_varint(1, self.user_id) + pb_varint(2, self.device_id) + pb_bytes(3, name.encode())
+        return pb_bytes(126, pb_bytes(1, pl))
     def setting_toggle_plaintext(self, setting_id):
         return pb_bytes(34, pb_bytes(1, pb_varint(1, setting_id) + pb_bytes(2, pb_bytes(3, b""))))
 
@@ -421,6 +442,8 @@ class LocalConnection:
     def arm(self, mode="defau"):  self.send_command(self.client.arm_disarm_plaintext(True, mode))
     def disarm(self, mode="defau"): self.send_command(self.client.arm_disarm_plaintext(False, mode))
     def toggle_setting(self, setting_id): self.send_command(self.client.setting_toggle_plaintext(setting_id))
+    def set_on_off(self, devid, on): self.send_command(self.client.set_on_off_plaintext(devid, on))
+    def set_name(self, name): self.send_command(self.client.set_name_plaintext(name))
     def read_messages(self, seconds=2):
         out = []; t0 = time.time()
         while time.time() - t0 < seconds:

@@ -15,7 +15,8 @@ except ImportError:  # older fallback
     from homeassistant.components.dhcp import DhcpServiceInfo  # type: ignore
 
 from .const import (DOMAIN, CONF_LOGIN, CONF_PASSWORD, CONF_HOST, CONF_SERIAL,
-                    CONF_DEVICE_UUID, CONF_MODE, DEFAULT_MODE)
+                    CONF_DEVICE_UUID, CONF_MODE, DEFAULT_MODE,
+                    CONF_APP_REGISTERED)
 from . import bewave_client as proto
 
 
@@ -54,6 +55,7 @@ class BeWaveConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input is not None:
             user_input[CONF_DEVICE_UUID] = secrets.token_hex(16).upper()
+            user_input[CONF_APP_REGISTERED] = True
             try:
                 serial = await _validate(self.hass, user_input)
             except Exception as err:  # noqa: BLE001

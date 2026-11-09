@@ -1,6 +1,7 @@
 """BE WAVE (Satel) integration for Home Assistant."""
 from __future__ import annotations
 import logging
+import secrets
 import threading
 import time
 from datetime import timedelta
@@ -11,7 +12,8 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (DOMAIN, CONF_LOGIN, CONF_PASSWORD, CONF_HOST, CONF_SERIAL,
-                    CONF_DEVICE_UUID, CONF_MODE, DEFAULT_MODE, SCAN_INTERVAL_SECONDS)
+                    CONF_DEVICE_UUID, CONF_MODE, DEFAULT_MODE, SCAN_INTERVAL_SECONDS,
+                    CONF_APP_REGISTERED)
 from . import bewave_client as proto
 
 _LOGGER = logging.getLogger(__name__)
@@ -94,6 +96,11 @@ class BeWaveHub:
             # immediately leaves the device read-only (it can read state but the hub
             # ignores its arm/disarm commands). Proven with bewave_ownuuid.py.
             self._registered = True
+            try:
+                self.conn.set_name("Home Assistant")
+                self.conn.read_messages(1)
+            except Exception:  # noqa: BLE001 - naming is cosmetic
+                pass
             self.conn.close()
             self.conn = None
             time.sleep(8)
@@ -158,9 +165,9 @@ class BeWaveHub:
                 self.info["network"] = net
             cfg = proto.parse_config_devices(pt)
             for did, d in cfg.items():
-                self.dev_names[did] = {k: d[k] for k in ("name", "room", "type", "model", "sysnum", "bypass")}
+                self.dev_names[did] = {k: d[k] for k in ("name", "room", "type", "model", "sysnum", "bypass", "hwtype")}
                 ds = self.dev_state.setdefault(did, {})
-                for k in ("signal", "battery", "state", "temp", "type", "volt"):
+                for k in ("signal", "battery", "state", "temp", "type", "volt", "on_off"):
                     if d.get(k) is not None:
                         ds[k] = d[k]
             for did, d in proto.parse_telemetry(pt).items():
@@ -185,7 +192,8 @@ class BeWaveHub:
                         "cat": proto.DEV_TYPES.get(typ, "device"),
                         "state": st.get("state"), "temp": st.get("temp"),
                         "battery": st.get("battery"), "signal": st.get("signal"),
-                        "volt": st.get("volt")})
+                        "volt": st.get("volt"), "hwtype": nm.get("hwtype"),
+                        "on_off": st.get("on_off")})
         return out
 
     def _command(self, send, verify=None):
@@ -221,6 +229,12 @@ class BeWaveHub:
         with self._lock:
             self._command(lambda: self.conn.disarm(self.mode),
                           verify=lambda: self.state == "disarmed")
+    def set_on_off(self, devid, desired):
+        """Switch a device output (e.g. a virtual IP device) on/off."""
+        with self._lock:
+            self._command(lambda: self.conn.set_on_off(devid, desired),
+                          verify=lambda: self.dev_state.get(devid, {}).get("on_off") == desired)
+
     def set_toggle(self, name, desired):
         if name not in proto.SETTING_IDS:
             return
@@ -234,6 +248,15 @@ class BeWaveHub:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    if not entry.data.get(CONF_APP_REGISTERED):
+        # Older entries registered their device token without credentials, which the
+        # hub treats as read-only for device control. Register a fresh token the way
+        # the Be Wave app does (sign-in with credentials) on first start.
+        hass.config_entries.async_update_entry(entry, data={
+            **entry.data,
+            CONF_DEVICE_UUID: secrets.token_hex(16).upper(),
+            CONF_APP_REGISTERED: True,
+        })
     hub = BeWaveHub(
         host=entry.data[CONF_HOST],
         login=entry.data[CONF_LOGIN],

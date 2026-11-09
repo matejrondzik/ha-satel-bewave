@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from . import bewave_client as proto
 from .const import DOMAIN
 
 # key -> (display name, reliability note)
@@ -19,10 +20,71 @@ SWITCHES = [
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
     data = hass.data[DOMAIN][entry.entry_id]
+    hub, coordinator = data["hub"], data["coordinator"]
     async_add_entities(
-        BeWaveSettingSwitch(data["coordinator"], data["hub"], entry, key, name)
+        BeWaveSettingSwitch(coordinator, hub, entry, key, name)
         for key, name in SWITCHES
     )
+    known: set[int] = set()
+
+    @callback
+    def _sync():
+        new = []
+        for d in hub.devices():
+            if d.get("hwtype") == proto.VIRTUAL_IP_DEVICE and d["id"] not in known:
+                known.add(d["id"])
+                new.append(BeWaveDeviceSwitch(coordinator, hub, entry, d["id"]))
+        if new:
+            async_add_entities(new)
+
+    _sync()
+    entry.async_on_unload(coordinator.async_add_listener(_sync))
+
+
+class BeWaveDeviceSwitch(CoordinatorEntity, SwitchEntity):
+    """On/off output of a BE WAVE device (virtual IP devices)."""
+
+    _attr_has_entity_name = True
+    _attr_name = None
+
+    def __init__(self, coordinator, hub, entry: ConfigEntry, devid: int):
+        super().__init__(coordinator)
+        self._hub = hub
+        self._devid = devid
+        serial = entry.data.get("serial") or entry.entry_id
+        self._attr_unique_id = f"bewave_{serial}_{devid}_onoff"
+        d = self._dev()
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{serial}_{devid}")},
+            manufacturer="Satel", model="Virtual IP device",
+            name=d.get("name") or f"BE WAVE {devid}",
+        )
+
+    def _dev(self):
+        for d in self._hub.devices():
+            if d["id"] == self._devid:
+                return d
+        return {}
+
+    @property
+    def is_on(self) -> bool | None:
+        return self._dev().get("on_off")
+
+    @property
+    def extra_state_attributes(self):
+        d = self._dev()
+        return {"room": d.get("room"), "device_id": self._devid,
+                "input_violated": d.get("state") == 1}
+
+    async def _set(self, on: bool):
+        await self.hass.async_add_executor_job(self._hub.set_on_off, self._devid, on)
+        self.async_write_ha_state()
+
+    async def async_turn_on(self, **kwargs):
+        await self._set(True)
+
+    async def async_turn_off(self, **kwargs):
+        await self._set(False)
 
 
 class BeWaveSettingSwitch(CoordinatorEntity, SwitchEntity):
