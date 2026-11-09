@@ -7,6 +7,7 @@ from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (DOMAIN, CONF_LOGIN, CONF_PASSWORD, CONF_HOST, CONF_SERIAL,
@@ -259,6 +260,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hub.start_keepalive()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"hub": hub, "coordinator": coordinator}
+    # Register the hub device first: sensor devices point to it via via_device,
+    # which fails if a sensor platform happens to load before the alarm panel.
+    serial = entry.data.get(CONF_SERIAL) or entry.entry_id
+    dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, serial)},
+        manufacturer="Satel",
+        model="BE WAVE",
+        name=f"BE WAVE {serial}",
+        sw_version=hub.info.get("firmware"),
+    )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
