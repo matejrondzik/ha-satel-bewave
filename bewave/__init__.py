@@ -17,7 +17,7 @@ from .const import (DOMAIN, CONF_LOGIN, CONF_PASSWORD, CONF_HOST, CONF_SERIAL,
 from . import bewave_client as proto
 
 _LOGGER = logging.getLogger(__name__)
-PLATFORMS = ["alarm_control_panel", "switch", "binary_sensor", "sensor"]
+PLATFORMS = ["alarm_control_panel", "switch", "binary_sensor", "sensor", "climate"]
 
 
 class BeWaveHub:
@@ -176,7 +176,7 @@ class BeWaveHub:
             for did, d in cfg.items():
                 self.dev_names[did] = {k: d[k] for k in ("name", "room", "type", "model", "sysnum", "bypass", "hwtype")}
                 ds = self.dev_state.setdefault(did, {})
-                for k in ("signal", "battery", "state", "temp", "type", "volt", "on_off"):
+                for k in ("signal", "battery", "state", "temp", "type", "volt", "on_off", "heater"):
                     if d.get(k) is not None:
                         ds[k] = d[k]
             for did, d in proto.parse_telemetry(pt).items():
@@ -202,7 +202,7 @@ class BeWaveHub:
                         "state": st.get("state"), "temp": st.get("temp"),
                         "battery": st.get("battery"), "signal": st.get("signal"),
                         "volt": st.get("volt"), "hwtype": nm.get("hwtype"),
-                        "on_off": st.get("on_off")})
+                        "on_off": st.get("on_off"), "heater": st.get("heater")})
         return out
 
     def _command(self, send, verify=None):
@@ -243,6 +243,12 @@ class BeWaveHub:
         with self._lock:
             self._command(lambda: self.conn.set_on_off(devid, desired),
                           verify=lambda: self.dev_state.get(devid, {}).get("on_off") == desired)
+
+    def set_patch(self, devid, command, verify=None, **values):
+        """Send one DeviceStateUpdate patch (e.g. heater target / mode) and verify via state."""
+        with self._lock:
+            return self._command(lambda: self.conn.send_patch(devid, command, **values),
+                                 verify=verify)
 
     def set_toggle(self, name, desired):
         if name not in proto.SETTING_IDS:

@@ -44,7 +44,12 @@ DEV_TYPES = {0x10002: "keyfob", 0x10003: "motion", 0x10007: "contact",
              0x1004F: "motion", 0x10051: "motion"}
 # HubDeviceType values (config f2) and HubDeviceState_Settings_Command values
 VIRTUAL_IP_DEVICE = 69
+ART_210 = 35                     # thermostatic radiator head
 SET_ON_OFF = 1
+SET_HEATER_WORKING_MODE = 60     # number: 0 manual, 1 schedule, 2 eco
+SET_HEATER_FORCED_VALUE = 61     # Float: active target temperature
+SET_HEATER_BOOST = 107           # boolean
+HEATER_MODES = {0: "manual", 1: "schedule", 2: "eco"}
 # HYBRID drops a session after ~2.7 s without traffic; refresh well below that.
 KEEPALIVE_S = 1.0
 # device model by config field f2 (verified from the app)
@@ -190,7 +195,20 @@ def _telem_from_block(f3block, f2list):
             "type": f3.get(10, [None])[0], "temp": temp,
             # HubDeviceState.Settings.onOff (f5); proto3 omits 0 -> off when block present
             "on_off": (f3.get(5, [0])[0] == 1) if f3 else None,
-            "volt": _f32(f3[110][0]) if 110 in f3 else None}
+            "volt": _f32(f3[110][0]) if 110 in f3 else None,
+            "heater": _heater(f3)}
+
+
+def _heater(f3):
+    """HubDeviceState.Settings heater fields (ART-210), None for other devices."""
+    if 60 not in f3 and 61 not in f3:
+        return None
+    def flt(k):
+        return _f32(f3[k][0]) if k in f3 and isinstance(f3[k][0], int) else None
+    return {"mode": f3.get(60, [0])[0], "target": flt(61), "day": flt(62), "night": flt(63),
+            "eco": flt(64), "manual": flt(95), "boost": f3.get(97, [0])[0] == 1,
+            "boost_time": f3.get(65, [None])[0], "parental": f3.get(68, [0])[0] == 1,
+            "valve": f3.get(109, [None])[0], "sensor": f3.get(67, [None])[0]}
 
 def parse_telemetry(plaintext):
     """f89 -> {devid: telemetry}."""
@@ -231,6 +249,7 @@ def parse_config_devices(plaintext):
                           "model": DEV_MODELS.get(dd.get(2, [None])[0]),
                           "hwtype": dd.get(2, [None])[0],
                           "on_off": tel.get("on_off"),
+                          "heater": tel.get("heater"),
                           "sysnum": dd.get(21, [None])[0],
                           "bypass": bool(dd.get(22, [0])[0]),
                           "signal": tel.get("signal"), "battery": tel.get("battery"),
@@ -321,6 +340,16 @@ class BeWaveClient:
         """DeviceStateUpdate (f66) -> payload.patches[{deviceId{uuid}, type=SET_ON_OFF, boolean}]."""
         patch = (pb_bytes(1, pb_varint(1, devid)) + pb_varint(2, SET_ON_OFF)
                  + pb_varint(10, 1 if on else 0))
+        return pb_bytes(66, pb_bytes(1, pb_bytes(1, patch)))
+    def patch_plaintext(self, devid, command, boolean=None, number=None, flt=None):
+        """Generic DeviceStateUpdate patch for one device."""
+        patch = pb_bytes(1, pb_varint(1, devid)) + pb_varint(2, command)
+        if boolean is not None:
+            patch += pb_varint(10, 1 if boolean else 0)
+        if number is not None:
+            patch += pb_varint(11, int(number))
+        if flt is not None:
+            patch += pb_fixed32(13, struct.unpack('<I', struct.pack('<f', float(flt)))[0])
         return pb_bytes(66, pb_bytes(1, pb_bytes(1, patch)))
     def set_name_plaintext(self, name):
         """AccountSetMobileDeviceName (f126) so the device is recognisable in the app."""
@@ -444,6 +473,7 @@ class LocalConnection:
     def toggle_setting(self, setting_id): self.send_command(self.client.setting_toggle_plaintext(setting_id))
     def set_on_off(self, devid, on): self.send_command(self.client.set_on_off_plaintext(devid, on))
     def set_name(self, name): self.send_command(self.client.set_name_plaintext(name))
+    def send_patch(self, devid, command, **kw): self.send_command(self.client.patch_plaintext(devid, command, **kw))
     def read_messages(self, seconds=2):
         out = []; t0 = time.time()
         while time.time() - t0 < seconds:
