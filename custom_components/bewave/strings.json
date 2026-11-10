@@ -111,6 +111,9 @@
     "sensor": {
       "valve_opening": {
         "name": "Valve opening"
+      },
+      "signal": {
+        "name": "Signal"
       }
     },
     "select": {
@@ -137,6 +140,9 @@
       },
       "problem": {
         "name": "Trouble"
+      },
+      "keypad_blocked": {
+        "name": "Keypad lockout"
       }
     }
   }

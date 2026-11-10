@@ -202,7 +202,8 @@ class BeWaveHub:
             for did, d in cfg.items():
                 self.dev_names[did] = {k: d[k] for k in ("name", "room", "type", "model", "sysnum", "bypass", "hwtype")}
                 ds = self.dev_state.setdefault(did, {})
-                for k in ("signal", "battery", "state", "temp", "type", "volt", "on_off", "heater", "errors"):
+                for k in ("signal", "battery", "state", "temp", "type", "volt", "on_off", "heater", "errors",
+                          "keypad_block"):
                     if d.get(k) is not None:
                         ds[k] = d[k]
             for did, d in proto.parse_telemetry(pt).items():
@@ -229,7 +230,7 @@ class BeWaveHub:
                         "battery": st.get("battery"), "signal": st.get("signal"),
                         "volt": st.get("volt"), "hwtype": nm.get("hwtype"),
                         "on_off": st.get("on_off"), "heater": st.get("heater"),
-                        "errors": st.get("errors")})
+                        "errors": st.get("errors"), "keypad_block": st.get("keypad_block")})
         return out
 
     def _command(self, send, verify=None):
@@ -325,6 +326,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hub.start_keepalive()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"hub": hub, "coordinator": coordinator}
+
+    # Device models arrive with the hub configuration, which can come after the entities
+    # registered their devices -> fill in missing models once they are known.
+    serial_id = entry.data.get(CONF_SERIAL) or entry.entry_id
+    done_models: set[int] = set()
+
+    def _sync_models():
+        reg = dr.async_get(hass)
+        for d in hub.devices():
+            if d["id"] in done_models or not d.get("model"):
+                continue
+            dev = reg.async_get_device(identifiers={(DOMAIN, f"{serial_id}_{d['id']}")})
+            if dev is None:
+                continue
+            if dev.model != d["model"]:
+                reg.async_update_device(dev.id, model=d["model"])
+            done_models.add(d["id"])
+
+    entry.async_on_unload(coordinator.async_add_listener(_sync_models))
     # Register the hub device first: sensor devices point to it via via_device,
     # which fails if a sensor platform happens to load before the alarm panel.
     serial = entry.data.get(CONF_SERIAL) or entry.entry_id

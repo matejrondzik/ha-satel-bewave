@@ -30,6 +30,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             if d["cat"] in _CLASS and d["id"] not in known:
                 known.add(d["id"])
                 new.append(BeWaveBinary(coordinator, hub, entry, d["id"], _CLASS[d["cat"]]))
+            if d.get("hwtype") in proto.KEYPAD_TYPES and ("keypad", d["id"]) not in known:
+                known.add(("keypad", d["id"]))
+                new.append(BeWaveKeypadBlock(coordinator, hub, entry, d["id"]))
             if d.get("errors") is not None and d.get("hwtype") != proto.VIRTUAL_IP_DEVICE \
                     and ("trouble", d["id"]) not in known:
                 known.add(("trouble", d["id"]))
@@ -159,3 +162,30 @@ class BeWaveDeviceTrouble(CoordinatorEntity, BinarySensorEntity):
         lang = self.hass.config.language if self.hass else None
         keys = [proto.DEV_ERRORS.get(c, f"code_{c}") for c in errs]
         return {"problems": ", ".join(describe(keys, lang)) or None, "problem_keys": keys, "codes": errs}
+
+
+class BeWaveKeypadBlock(BeWaveDeviceTrouble):
+    """Keypad locked by the hub (e.g. after too many wrong codes)."""
+
+    def __init__(self, coordinator, hub, entry: ConfigEntry, devid):
+        super().__init__(coordinator, hub, entry, devid, tamper=False)
+        serial = entry.data.get("serial") or entry.entry_id
+        self._attr_translation_key = "keypad_blocked"
+        self._attr_unique_id = f"bewave_{serial}_{devid}_keypad_blocked"
+        self._attr_device_class = None
+        self._attr_entity_category = None
+
+    @property
+    def is_on(self):
+        v = self._dev().get("keypad_block")
+        return None if v is None else bool(v)
+
+    @property
+    def icon(self):
+        return "mdi:dialpad" if not self.is_on else "mdi:lock-alert"
+
+    @property
+    def extra_state_attributes(self):
+        d = self._dev()
+        return {"model": d.get("model"), "system_number": d.get("sysnum"), "supply_voltage": d.get("volt"),
+                "signal_pct": d.get("signal")}

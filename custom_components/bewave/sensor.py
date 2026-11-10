@@ -4,9 +4,9 @@ from __future__ import annotations
 from homeassistant.components.sensor import (
     SensorEntity, SensorDeviceClass, SensorStateClass)
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTemperature, PERCENTAGE
+from homeassistant.const import UnitOfTemperature, UnitOfElectricPotential, PERCENTAGE
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
@@ -17,7 +17,11 @@ _KINDS = {
     "battery": ("battery", None, SensorDeviceClass.BATTERY, PERCENTAGE, None),
     # thermostat heads: how far the valve is open (0 % = closed)
     "valve": ("valve", "valve_opening", None, PERCENTAGE, "mdi:valve"),
+    # diagnostics: radio link quality (0-100 %) and supply / battery voltage
+    "signal": ("signal", "signal", None, PERCENTAGE, None),
+    "volt": ("volt", None, SensorDeviceClass.VOLTAGE, UnitOfElectricPotential.VOLT, None),
 }
+_DIAGNOSTIC = {"signal", "volt"}
 
 
 def _value(d: dict, kind: str):
@@ -61,6 +65,8 @@ class BeWaveSensor(CoordinatorEntity, SensorEntity):
         if icon:
             self._attr_icon = icon
         self._attr_device_class = dclass
+        if kind in _DIAGNOSTIC:
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
         self._attr_native_unit_of_measurement = unit
         serial = entry.data.get("serial") or entry.entry_id
         self._attr_unique_id = f"bewave_{serial}_{devid}_{kind}"

@@ -111,6 +111,9 @@
     "sensor": {
       "valve_opening": {
         "name": "Otvorenie ventilu"
+      },
+      "signal": {
+        "name": "Signál"
       }
     },
     "select": {
@@ -137,6 +140,9 @@
       },
       "problem": {
         "name": "Porucha"
+      },
+      "keypad_blocked": {
+        "name": "Blokovanie klávesnice"
       }
     }
   }

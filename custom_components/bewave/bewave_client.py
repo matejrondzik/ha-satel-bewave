@@ -53,7 +53,22 @@ HEATER_MODES = {0: "manual", 1: "schedule", 2: "eco"}
 # HYBRID drops a session after ~2.7 s without traffic; refresh well below that.
 KEEPALIVE_S = 1.0
 # device model by config field f2 (verified from the app)
-DEV_MODELS = {11: "APD-200", 26: "APT-210", 42: "AXD-200 Lite"}
+DEV_MODELS = {  # HubDeviceType (device config field 2) -> model name
+    0: "External camera", 1: "Hub main board", 10: "AOD-210", 11: "APD-200", 12: "APCAM-200", 13: "APD-200 Pet",
+    14: "APMD-250", 15: "AOCD-260", 16: "ACD-220", 17: "AXD-200", 18: "AFD-200", 19: "AGD-200",
+    20: "ASD-200", 21: "ASD-210", 22: "ASD-250", 23: "ACMD-200", 24: "APB-210", 25: "ADD-200",
+    26: "APT-210", 27: "ASW-200 E", 28: "ASW-210", 29: "ASP-200-R", 30: "ASP-215-R", 31: "ARSC-200",
+    32: "ADC-200", 33: "ARC-200", 34: "AVC-200", 35: "ART-210", 36: "ATPH-200", 37: "ACX-210",
+    38: "ACX-220", 39: "ATX-200", 40: "ATX-210", 41: "AKP-200", 42: "AXD-200 Lite", 43: "INT-E",
+    44: "INT-O", 45: "INT-PP", 46: "INT-IORS", 47: "INT-ORS", 48: "INT-E-PS", 49: "INT-O-PS",
+    50: "INT-PP-PS", 51: "INT-IORS-PS", 52: "INT-ORS-PS", 53: "TPH2", 54: "TSH2", 55: "TSG2",
+    56: "SO-MF5", 57: "SLIM-PIR-PRO-BUS", 58: "SLIM-PIR-LUNA-PET-BUS", 59: "SLIM-PIR-LUNA-BUS", 60: "SLIM-DUAL-PRO-BUS", 61: "SLIM-DUAL-LUNA-PET-BUS",
+    62: "SLIM-DUAL-LUNA-BUS", 63: "AUT-200", 64: "APC-200", 65: "APMC-250", 66: "AOCAM-210", 67: "ARU-200",
+    68: "ASW-220", 69: "Virtual IP device", 70: "APB-200", 71: "TSH2R", 72: "TSG2R", 73: "TSH210",
+    74: "TSH210R", 75: "SO-MF2", 76: "SO-MF3", 77: "SLIM-SR-PIR-PRO-BUS", 78: "SLIM-SR-DUAL-PRO-BUS", 79: "SLIM-SR-PIR-LUNA-BUS",
+    80: "SLIM-SR-DUAL-LUNA-BUS", 81: "INT-IT2MF", 82: "AXU-250", 83: "CR-MF3", 84: "CR-MF5",
+}
+KEYPAD_TYPES = {41, 53, 54, 55, 71, 72, 73, 74}   # AKP-200, TPH2/TSH2/TSG2(R), TSH210(R)
 
 # ---------- helpers ----------
 def md5(x): return hashlib.md5(x.encode() if isinstance(x, str) else x).digest()
@@ -236,6 +251,8 @@ def _telem_from_block(f3block, f2list, errs=None):
             "on_off": (f3.get(5, [0])[0] == 1) if f3 else None,
             "volt": _f32(f3[110][0]) if 110 in f3 else None,
             "heater": _heater(f3),
+            # HubDeviceState.Settings.keypadBlock (f112): keypad locked by the hub
+            "keypad_block": (f3.get(112, [0])[0] == 1) if f3 else None,
             "errors": packed_ints(errs) if errs is not None else None}
 
 
@@ -295,7 +312,8 @@ def parse_config_devices(plaintext):
                           "bypass": bool(dd.get(22, [0])[0]),
                           "signal": tel.get("signal"), "battery": tel.get("battery"),
                           "state": tel.get("state"), "temp": tel.get("temp"),
-                          "volt": tel.get("volt"), "errors": tel.get("errors")}
+                          "volt": tel.get("volt"), "errors": tel.get("errors"),
+                          "keypad_block": tel.get("keypad_block")}
     return out
 
 # ---------- framing ----------
