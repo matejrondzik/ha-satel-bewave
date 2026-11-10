@@ -39,6 +39,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 class BeWaveThermostat(CoordinatorEntity, ClimateEntity):
     _attr_has_entity_name = True
     _attr_name = None
+    _attr_translation_key = "thermostat"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.HEAT]
     _attr_hvac_mode = HVACMode.HEAT

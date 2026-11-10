@@ -76,6 +76,19 @@ mobile-device slot* (remove an unused phone in the Be Wave app).
 | Arm / disarm a different protection mode | Integration → **Configure** → *Protection mode* (`defau` = default, whole object) |
 | Reporting a bug | Integration ⋮ → **Download diagnostics**. Credentials, serial number and device names are removed automatically. |
 
+## Dashboard
+
+[`docs/dashboard.yaml`](docs/dashboard.yaml) is a ready-made **Security** view built only from native
+Home Assistant cards (no HACS cards needed):
+
+- an alarm tile with *Arm away / Disarm* buttons and motion detectors per room,
+- a thermostat with preset buttons (manual / schedule / eco / boost), valve opening and head battery,
+- temperature tiles with 24 h trend graphs,
+- virtual devices with toggles,
+- hub settings, where switches that matter (Grade 2, SATEL cloud) ask for confirmation, and batteries.
+
+Paste it via *Dashboard → Edit → Raw configuration editor* and replace the entity ids with yours.
+
 ## Good to know
 
 - **Virtual IP devices** are the cleanest way to link Be Wave scenarios with Home Assistant.

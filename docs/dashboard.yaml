@@ -1,0 +1,165 @@
+# BE WAVE dashboard view – native Home Assistant cards only (no HACS cards needed).
+# Dashboard → ⋮ → Edit → ⋮ → Raw configuration editor, paste under `views:`
+# and replace the entity ids with yours (Settings → Entities, filter: bewave).
+views:
+- title: Security
+  path: security
+  icon: mdi:shield-home
+  type: sections
+  max_columns: 3
+  sections:
+  - type: grid
+    cards:
+    - type: heading
+      heading: Alarm
+      icon: mdi:shield-home
+      heading_style: title
+    - type: tile
+      entity: alarm_control_panel.bewave_alarm
+      name: BE WAVE hub
+      vertical: false
+      features_position: bottom
+      state_content:
+      - state
+      - last_changed
+      grid_options:
+        columns: 12
+      features:
+      - type: alarm-modes
+        modes:
+        - armed_away
+        - disarmed
+    - type: heading
+      heading: Motion
+      heading_style: subtitle
+    - type: tile
+      entity: binary_sensor.bewave_hallway_motion
+      name: Hallway
+      state_content:
+      - state
+      - last_changed
+    - type: tile
+      entity: binary_sensor.bewave_living_room_motion
+      name: Living room
+      state_content:
+      - state
+      - last_changed
+  - type: grid
+    cards:
+    - type: heading
+      heading: Heating
+      icon: mdi:radiator
+      heading_style: title
+    - type: thermostat
+      entity: climate.bewave_living_room_radiator
+      name: Living room radiator
+      show_current_as_primary: true
+      features:
+      - type: climate-preset-modes
+        style: icons
+        preset_modes:
+        - manual
+        - schedule
+        - eco
+        - boost
+    - type: tile
+      entity: climate.bewave_living_room_radiator
+      name: Valve
+      icon: mdi:valve
+      state_content:
+      - hvac_action
+      - valve_opening
+      tap_action:
+        action: more-info
+    - type: tile
+      entity: sensor.bewave_living_room_radiator_battery
+      name: Head battery
+      hide_state: false
+  - type: grid
+    cards:
+    - type: heading
+      heading: Temperatures
+      icon: mdi:thermometer
+      heading_style: title
+    - type: tile
+      entity: sensor.bewave_living_room_temperature
+      name: Living room
+      features:
+      - type: trend-graph
+        hours_to_show: 24
+      features_position: bottom
+      grid_options:
+        columns: 6
+        rows: 2
+    - type: tile
+      entity: sensor.bewave_hallway_temperature
+      name: Hallway
+      features:
+      - type: trend-graph
+        hours_to_show: 24
+      features_position: bottom
+      grid_options:
+        columns: 6
+        rows: 2
+  - type: grid
+    cards:
+    - type: heading
+      heading: Virtual devices
+      icon: mdi:swap-horizontal-bold
+      heading_style: title
+    - type: tile
+      entity: switch.bewave_leaving_home
+      name: Leaving home
+      features:
+      - type: toggle
+      features_position: inline
+      state_content:
+      - state
+      - last_changed
+      grid_options:
+        columns: 12
+  - type: grid
+    cards:
+    - type: heading
+      heading: Hub
+      icon: mdi:router-wireless
+      heading_style: title
+    - type: tile
+      entity: switch.bewave_led
+      name: Status LED
+      icon: mdi:led-on
+      features:
+      - type: toggle
+      features_position: inline
+      grid_options:
+        columns: 12
+    - type: tile
+      entity: switch.bewave_grade_2
+      name: Grade 2
+      icon: mdi:shield-star
+      tap_action:
+        action: toggle
+        confirmation:
+          text: Change the Grade 2 mode of the hub?
+      icon_tap_action:
+        action: toggle
+        confirmation:
+          text: Change the Grade 2 mode of the hub?
+    - type: tile
+      entity: switch.bewave_satel_server
+      name: SATEL cloud
+      icon: mdi:cloud-lock
+      tap_action:
+        action: toggle
+        confirmation:
+          text: Change the hub's SATEL cloud connection? Without it the app does not work away from home.
+      icon_tap_action:
+        action: toggle
+        confirmation:
+          text: Change the hub's SATEL cloud connection? Without it the app does not work away from home.
+    - type: heading
+      heading: Batteries
+      heading_style: subtitle
+    - type: tile
+      entity: sensor.bewave_hallway_battery
+      name: Hallway detector

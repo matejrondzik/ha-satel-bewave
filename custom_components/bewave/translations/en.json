@@ -71,5 +71,42 @@
         "defau": "Default mode (defau)"
       }
     }
+  },
+  "entity": {
+    "climate": {
+      "thermostat": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "manual": "Manual",
+              "schedule": "Schedule",
+              "eco": "Eco",
+              "boost": "Boost"
+            }
+          },
+          "valve_opening": {
+            "name": "Valve opening"
+          },
+          "temperature_day": {
+            "name": "Day temperature"
+          },
+          "temperature_night": {
+            "name": "Night temperature"
+          },
+          "temperature_eco": {
+            "name": "Eco temperature"
+          },
+          "temperature_manual": {
+            "name": "Manual temperature"
+          },
+          "child_lock": {
+            "name": "Child lock"
+          },
+          "boost_time_s": {
+            "name": "Boost time"
+          }
+        }
+      }
+    }
   }
 }

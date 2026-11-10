@@ -1,0 +1,19 @@
+{
+  "entity": {
+    "climate": {
+      "thermostat": {
+        "state_attributes": {
+          "preset_mode": {
+            "default": "mdi:radiator",
+            "state": {
+              "manual": "mdi:hand-back-right",
+              "schedule": "mdi:calendar-clock",
+              "eco": "mdi:leaf",
+              "boost": "mdi:rocket-launch"
+            }
+          }
+        }
+      }
+    }
+  }
+}
