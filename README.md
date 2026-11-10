@@ -1,3 +1,5 @@
+<img src="custom_components/bewave/brand/logo.png" alt="BE WAVE" height="64">
+
 # BE WAVE (Satel) for Home Assistant
 
 [![hacs][hacs-badge]][hacs] [![Validate][validate-badge]][validate]
@@ -128,7 +130,7 @@ MIT. See [LICENSE](LICENSE). Original work © @slaveitgr and contributors; addit
 Matej Rondzik.
 
 This is an unofficial project, not affiliated with or endorsed by SATEL sp. z o.o. "Satel" and
-"BE WAVE" are trademarks of their owners. The protocol was documented by observing the local
+"BE WAVE" and the BE WAVE logo are trademarks of their owners and are used only to identify the supported devices. The protocol was documented by observing the local
 communication of devices the authors own. Use at your own risk, especially with security
 functions.
 
