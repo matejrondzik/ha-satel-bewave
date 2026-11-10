@@ -124,6 +124,20 @@
           "mixed": "Mixed"
         }
       }
+    },
+    "binary_sensor": {
+      "hub_tamper": {
+        "name": "Tamper"
+      },
+      "hub_problem": {
+        "name": "Hub trouble"
+      },
+      "tamper": {
+        "name": "Tamper"
+      },
+      "problem": {
+        "name": "Trouble"
+      }
     }
   }
 }

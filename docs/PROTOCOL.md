@@ -65,3 +65,11 @@ The device state lists the commands it supports in field 1 (packed). Other state
 
 14 APMD-250 · 28 ASW-210 · 32 ADC-200 · 35 **ART-210** (thermostat head) · 36 ATPH-200 ·
 59 SLIM-PIR-LUNA-BUS · 69 **virtual IP device** · 72 TSG2R keypad
+
+## Troubles (error codes)
+
+- **Hub:** `SystemInfo.Details` (status block f27 → f1 → f1) field **12** = active `HubErrorCode`s
+  (packed), field **27** = troubles memory. 0 TAMPER, 1 RADIO_JAMMED, 2 BATTERY_LOW, 5 PROBLEM_WITH_AC,
+  6 ETHERNET_CABLE_DISCONNECTED, 7 PROBLEM_WITH_WIFI, 40 PROBLEM_WITH_SATEL_CLOUD, … (see `HUB_ERRORS`).
+- **Device:** `HubDeviceState` field **1** = `HubDeviceState.ErrorCode`s (packed): 0 CONNECTION_FAILURE,
+  2 TAMPER, 4 BATTERY_LOW, 12 MASKING, 26 DEV_ART_VALVE_OVER_RANGE, … (see `DEV_ERRORS`).

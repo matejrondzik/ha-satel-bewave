@@ -124,6 +124,20 @@
           "mixed": "Rôzne"
         }
       }
+    },
+    "binary_sensor": {
+      "hub_tamper": {
+        "name": "Sabotáž ústredne"
+      },
+      "hub_problem": {
+        "name": "Porucha ústredne"
+      },
+      "tamper": {
+        "name": "Sabotáž"
+      },
+      "problem": {
+        "name": "Porucha"
+      }
     }
   }
 }

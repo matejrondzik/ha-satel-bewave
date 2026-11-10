@@ -46,6 +46,46 @@ views:
         - armed_away
         - disarmed
       features_position: bottom
+    - type: tile
+      entity: binary_sensor.bewave_hub_tamper
+      name: Tamper
+      icon: mdi:shield-alert
+      grid_options:
+        columns: 12
+      state_content:
+      - state
+      - last_changed
+    - type: tile
+      entity: binary_sensor.bewave_hub_trouble
+      name: Troubles
+      grid_options:
+        columns: 12
+      state_content:
+      - problems
+    - type: tile
+      entity: binary_sensor.hallway_detector_tamper
+      name: Hallway detector – tamper
+      grid_options:
+        columns: 12
+      state_content:
+      - state
+      - last_changed
+      visibility:
+      - condition: state
+        entity: binary_sensor.hallway_detector_tamper
+        state: 'on'
+    - type: tile
+      entity: binary_sensor.hallway_detector_trouble
+      name: Hallway detector – trouble
+      grid_options:
+        columns: 12
+      state_content:
+      - problems
+      - last_changed
+      visibility:
+      - condition: state
+        entity: binary_sensor.hallway_detector_trouble
+        state: 'on'
     - type: heading
       heading: Motion
       heading_style: subtitle

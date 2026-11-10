@@ -152,6 +152,44 @@ def system_status(plaintext):
             "grade2": bool(body.get(26) and body[26][0] == 1),
             "satel": not (22 in body and body[22][0] == 1)}
 
+# SystemInfo.Details.HubErrorCode (hub troubles, f27.f1.f1 field 12; memory = field 27)
+HUB_ERRORS = {
+    0: "tamper", 1: "radio_jammed", 2: "battery_low", 3: "battery_disconnected",
+    4: "battery_replace", 5: "ac_power", 6: "ethernet_disconnected", 7: "wifi",
+    8: "sim1_missing", 9: "sim1_pin", 10: "sim1_puk", 11: "sim2_missing", 12: "sim2_pin", 13: "sim2_puk",
+    14: "sd_missing", 15: "sd_low_memory", 16: "sd_format", 17: "sd_error",
+    40: "satel_cloud", 41: "invalid_dc", 42: "charger_fault", 43: "hub_overheat", 44: "event_buffer_full",
+    45: "aps_communication", 46: "aps_overload", 47: "aps_overheat", 48: "vcc_output_overload",
+    **{c: "reporting_trouble" for c in range(20, 36)},
+}
+# HubDeviceState.ErrorCode (per device, HubDeviceState field 1)
+DEV_ERRORS = {
+    0: "connection_failure", 1: "connection_disconnected", 2: "tamper", 3: "sensor_dirty",
+    4: "battery_low", 5: "output_overload", 6: "aps_trouble", 7: "aps_overload", 8: "aps_overheat",
+    9: "battery_disconnected", 10: "battery_replace", 11: "ac_power", 12: "masking", 13: "fault",
+    14: "overheat", 15: "sensor_fault", 16: "smoke_chamber_dirty", 17: "internal_fault",
+    18: "ac_sync", 19: "overload", 20: "no_load", 21: "hardware_fault", 22: "calibration_required",
+    23: "calibration_problem", 24: "device_inverted", 25: "valve_dc_start", 26: "valve_over_range",
+    27: "valve_button", 28: "valve_motor", 29: "valve_internal", 30: "valve_calibration",
+    31: "sensor_detection",
+}
+HUB_TAMPER = 0
+DEV_TAMPER = 2
+
+
+def packed_ints(vals):
+    """repeated enum: packed (bytes) or not (ints) -> [int]."""
+    out = []
+    for v in vals or []:
+        if isinstance(v, int):
+            out.append(v)
+        elif isinstance(v, (bytes, bytearray)):
+            i = 0
+            while i < len(v):
+                x, i = _rv(v, i); out.append(x)
+    return out
+
+
 def hub_info(plaintext):
     """f27 -> {'power','stor_free','stor_total','firmware'} or None."""
     d = pb_read(plaintext)
@@ -166,7 +204,8 @@ def hub_info(plaintext):
         v = pb_read(body[40][0]).get(9, [b""])[0]
         if _looks_str(v): fw = v.decode("latin1")
     return {"power": pw, "stor_free": body.get(10, [None])[0],
-            "stor_total": body.get(11, [None])[0], "firmware": fw}
+            "stor_total": body.get(11, [None])[0], "firmware": fw,
+            "errors": packed_ints(body.get(12)), "errors_memory": packed_ints(body.get(27))}
 
 def network_active(plaintext):
     """f31 -> active connection name (e.g. 'LAN') or None."""
@@ -182,8 +221,8 @@ def network_active(plaintext):
                 return _s(ed.get(2, [b''])[0])
     return None
 
-def _telem_from_block(f3block, f2list):
-    """extract telemetry from a device's f3 body + nested f2 (temp)."""
+def _telem_from_block(f3block, f2list, errs=None):
+    """extract telemetry from a device's f3 body + nested f2 (temp) + f1 error codes."""
     f3 = pb_read(f3block) if f3block else {}
     temp = None
     for t in f2list:
@@ -196,7 +235,8 @@ def _telem_from_block(f3block, f2list):
             # HubDeviceState.Settings.onOff (f5); proto3 omits 0 -> off when block present
             "on_off": (f3.get(5, [0])[0] == 1) if f3 else None,
             "volt": _f32(f3[110][0]) if 110 in f3 else None,
-            "heater": _heater(f3)}
+            "heater": _heater(f3),
+            "errors": packed_ints(errs) if errs is not None else None}
 
 
 def _heater(f3):
@@ -223,7 +263,8 @@ def parse_telemetry(plaintext):
         devid = pb_read(dd[1][0]).get(1, [None])[0]
         if devid is None: continue
         body = pb_read(dd[2][0]) if 2 in dd else {}
-        out[devid] = _telem_from_block(body[3][0] if 3 in body else None, body.get(2, []))
+        out[devid] = _telem_from_block(body[3][0] if 3 in body else None, body.get(2, []),
+                                       body.get(1, []) if 2 in dd else None)
     return out
 
 def parse_config_devices(plaintext):
@@ -243,7 +284,7 @@ def parse_config_devices(plaintext):
             tel = {"type": None}
             if 20 in dd:
                 t = pb_read(dd[20][0])
-                tel = _telem_from_block(t[3][0] if 3 in t else None, t.get(2, []))
+                tel = _telem_from_block(t[3][0] if 3 in t else None, t.get(2, []), t.get(1, []))
             out[devid] = {"name": _s(dd.get(9, [b''])[0]), "room": rname,
                           "type": tel.get("type"),
                           "model": DEV_MODELS.get(dd.get(2, [None])[0]),
@@ -254,7 +295,7 @@ def parse_config_devices(plaintext):
                           "bypass": bool(dd.get(22, [0])[0]),
                           "signal": tel.get("signal"), "battery": tel.get("battery"),
                           "state": tel.get("state"), "temp": tel.get("temp"),
-                          "volt": tel.get("volt")}
+                          "volt": tel.get("volt"), "errors": tel.get("errors")}
     return out
 
 # ---------- framing ----------

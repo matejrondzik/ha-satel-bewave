@@ -38,7 +38,7 @@ class BeWaveHub:
         self.state: str | None = None          # armed_away | disarmed | None
         self.flags = {"led": None, "grade2": None, "satel": None}
         self.info = {"power": None, "stor_free": None, "stor_total": None,
-                     "network": None, "firmware": None}
+                     "network": None, "firmware": None, "errors": None, "errors_memory": None}
         self.dev_names: dict[int, dict] = {}   # config: name/room/model/sysnum/bypass
         self.dev_state: dict[int, dict] = {}   # live telemetry
         self.on_update = None                  # set by setup: push new data to HA
@@ -191,7 +191,8 @@ class BeWaveHub:
             hi = proto.hub_info(pt)
             if hi is not None:
                 self.info.update({"power": hi["power"], "stor_free": hi["stor_free"],
-                                  "stor_total": hi["stor_total"]})
+                                  "stor_total": hi["stor_total"], "errors": hi["errors"],
+                                  "errors_memory": hi["errors_memory"]})
                 if hi.get("firmware"):
                     self.info["firmware"] = hi["firmware"]
             net = proto.network_active(pt)
@@ -201,7 +202,7 @@ class BeWaveHub:
             for did, d in cfg.items():
                 self.dev_names[did] = {k: d[k] for k in ("name", "room", "type", "model", "sysnum", "bypass", "hwtype")}
                 ds = self.dev_state.setdefault(did, {})
-                for k in ("signal", "battery", "state", "temp", "type", "volt", "on_off", "heater"):
+                for k in ("signal", "battery", "state", "temp", "type", "volt", "on_off", "heater", "errors"):
                     if d.get(k) is not None:
                         ds[k] = d[k]
             for did, d in proto.parse_telemetry(pt).items():
@@ -227,7 +228,8 @@ class BeWaveHub:
                         "state": st.get("state"), "temp": st.get("temp"),
                         "battery": st.get("battery"), "signal": st.get("signal"),
                         "volt": st.get("volt"), "hwtype": nm.get("hwtype"),
-                        "on_off": st.get("on_off"), "heater": st.get("heater")})
+                        "on_off": st.get("on_off"), "heater": st.get("heater"),
+                        "errors": st.get("errors")})
         return out
 
     def _command(self, send, verify=None):
