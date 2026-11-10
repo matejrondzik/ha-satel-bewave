@@ -294,6 +294,14 @@ def parse_header(buf, i):
 
 # ============================================================
 class BeWaveError(Exception): pass
+class BeWaveAuthError(BeWaveError):
+    """Hub rejected the login / password (header error 102 during sign-in)."""
+class BeWaveDeviceLimitError(BeWaveError):
+    """Hub refused a new mobile-device token: per-user slot limit reached (header error 31)."""
+
+# header f10 error codes seen during sign-in
+SIGNIN_ERR_AUTH = 102
+SIGNIN_ERR_DEVICE_LIMIT = 31
 
 class BeWaveClient:
     def __init__(self, login, password, device_uuid=None, device_token=None):
@@ -404,6 +412,11 @@ class LocalConnection:
         while time.time() < deadline and not signed:
             self._pump()
             for fd, pt in self._drain():
+                err = fd.get(10)
+                if err == SIGNIN_ERR_AUTH:
+                    raise BeWaveAuthError("invalid login or password")
+                if err == SIGNIN_ERR_DEVICE_LIMIT:
+                    raise BeWaveDeviceLimitError("mobile-device limit for this user reached")
                 if pt and len(pt) > 200 and self.client.ingest_response(pt):
                     if isinstance(fd.get(3), int):
                         self.client.user_id = fd[3]

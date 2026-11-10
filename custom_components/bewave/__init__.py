@@ -1,5 +1,6 @@
 """BE WAVE (Satel) integration for Home Assistant."""
 from __future__ import annotations
+import contextlib
 import logging
 import secrets
 import threading
@@ -9,6 +10,7 @@ from datetime import timedelta
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (DOMAIN, CONF_LOGIN, CONF_PASSWORD, CONF_HOST, CONF_SERIAL,
@@ -51,6 +53,23 @@ class BeWaveHub:
 
     def stop_keepalive(self):
         self._stop.set()
+
+    @contextlib.contextmanager
+    def paused(self):
+        """Release the hub session for a moment (blocking; run in executor).
+
+        The hub allows only one session per registered device token, so the config
+        flow must borrow it to verify a new IP / password. Poll reconnects afterwards.
+        """
+        with self._lock:
+            try:
+                if self.conn:
+                    self.conn.close()
+            except Exception:  # noqa: BLE001
+                pass
+            self.conn = None
+            self._empty = 0
+            yield
 
     def _snapshot(self):
         return (self.state, repr(sorted(self.dev_state.items())), repr(self.flags))
@@ -139,11 +158,14 @@ class BeWaveHub:
             except Exception as err:  # noqa: BLE001
                 # One immediate reconnect before reporting a failure, so a session the
                 # hub dropped (e.g. when the phone app connects) does not flap entities.
+                auth_err = None
                 try:
                     self._reconnect()
                     msgs = self.conn.read_messages(1.5)
                     self._update_from(msgs)
                     return {"state": self.state}
+                except proto.BeWaveAuthError as e:
+                    auth_err = e
                 except Exception:  # noqa: BLE001
                     pass
                 try:
@@ -151,6 +173,9 @@ class BeWaveHub:
                 finally:
                     self.conn = None
                 self._empty = 0
+                if auth_err is not None or isinstance(err, proto.BeWaveAuthError):
+                    # password changed in the Be Wave app -> HA shows "Re-authenticate"
+                    raise ConfigEntryAuthFailed("BE WAVE hub rejected the login") from err
                 raise UpdateFailed(f"BE WAVE poll failed: {err}") from err
 
     def _update_from(self, msgs):

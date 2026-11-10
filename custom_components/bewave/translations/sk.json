@@ -1,0 +1,75 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Pripojenie ústredne BE WAVE",
+        "description": "Funguje s BE WAVE Smart HUB aj ústredňami HYBRID (napr. HYBRID 128 Plus) cez lokálnu sieť — bez cloudu a bez ďalšieho mostíka.\n\nHome Assistant sa prihlási rovnako ako mobilná appka **Be Wave** a v nej sa zobrazí ako ďalšie mobilné zariadenie zadaného užívateľa.",
+        "data": {
+          "host": "IP adresa ústredne",
+          "login": "Meno",
+          "password": "Heslo"
+        },
+        "data_description": {
+          "host": "Lokálna IP adresa ústredne, napr. `192.168.1.50`. V routeri jej nastav pevnú (rezervovanú) adresu.",
+          "login": "Užívateľské meno, ktorým sa prihlasuješ v appke Be Wave. Na ovládanie zariadení treba užívateľa s právami k nim (zvyčajne administrátor).",
+          "password": "Heslo tohto užívateľa. Uloží sa iba v Home Assistante a do ústredne ide šifrovane."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Prihlásiť znova",
+        "description": "Ústredňa na {host} odmietla uložené prihlásenie — heslo sa pravdepodobne zmenilo v appke Be Wave. Zadaj aktuálne. Home Assistant si ponechá svoje zaregistrované zariadenie, takže nezaberie ďalšie miesto.",
+        "data": {
+          "login": "Meno",
+          "password": "Heslo"
+        },
+        "data_description": {
+          "login": "Užívateľské meno, ktorým sa prihlasuješ v appke Be Wave. Na ovládanie zariadení treba užívateľa s právami k nim (zvyčajne administrátor).",
+          "password": "Nové heslo tohto užívateľa."
+        }
+      },
+      "reconfigure": {
+        "title": "Zmena adresy ústredne",
+        "description": "Použi, keď ústredňa dostala novú IP adresu. Prihlásenie aj zaregistrované zariadenie zostanú.",
+        "data": {
+          "host": "IP adresa ústredne"
+        },
+        "data_description": {
+          "host": "Nová lokálna IP adresa tej istej ústredne."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Ústredňa nie je dostupná. Skontroluj IP adresu a či je Home Assistant v rovnakej sieti (musí byť dostupný TCP port 4200).",
+      "invalid_auth": "Ústredňa odmietla meno alebo heslo.",
+      "device_limit": "Tento užívateľ nemá na ústredni voľné miesto pre ďalšie mobilné zariadenie. V appke Be Wave odstráň jeho nepoužívané mobilné zariadenie a skús znova."
+    },
+    "abort": {
+      "already_configured": "Táto ústredňa BE WAVE je už pridaná.",
+      "reauth_successful": "Prihlásenie obnovené — integrácia sa načítava znova.",
+      "reconfigure_successful": "Adresa ústredne zmenená.",
+      "wrong_hub": "Na tejto adrese je iná ústredňa (iné sériové číslo), než aká je nastavená."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Nastavenia BE WAVE",
+        "description": "Vyber, ktorý režim stráženia entita alarmu zastráži a odstráži.",
+        "data": {
+          "mode": "Režim stráženia"
+        },
+        "data_description": {
+          "mode": "Kľúč režimu v ústredni. `defau` je predvolený režim (celý objekt). Môžeš zadať kľúč iného režimu nastaveného v appke Be Wave."
+        }
+      }
+    }
+  },
+  "selector": {
+    "mode": {
+      "options": {
+        "defau": "Predvolený režim (defau)"
+      }
+    }
+  }
+}

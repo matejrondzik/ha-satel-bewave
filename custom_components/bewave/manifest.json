@@ -2,7 +2,7 @@
   "domain": "bewave",
   "name": "BE WAVE (Satel)",
   "codeowners": [
-    "@slaveitgr"
+    "@matejrondzik"
   ],
   "config_flow": true,
   "dhcp": [
@@ -10,12 +10,12 @@
       "macaddress": "001B9C*"
     }
   ],
-  "documentation": "https://github.com/slaveitgr/Satel_BeWAVE_Home_Assistant-",
+  "documentation": "https://github.com/matejrondzik/ha-satel-bewave",
   "integration_type": "device",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/slaveitgr/Satel_BeWAVE_Home_Assistant-/issues",
+  "issue_tracker": "https://github.com/matejrondzik/ha-satel-bewave/issues",
   "requirements": [
     "cryptography>=3.0"
   ],
-  "version": "0.6.0+hybrid1"
+  "version": "0.6.0"
 }

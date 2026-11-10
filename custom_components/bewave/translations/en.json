@@ -1,0 +1,75 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Connect a BE WAVE hub",
+        "description": "Works with BE WAVE Smart HUB and the HYBRID control panels (e.g. HYBRID 128 Plus) over the local network — no cloud, no extra bridge.\n\nHome Assistant signs in exactly like the **Be Wave** mobile app and appears there as one more mobile device of the user you enter.",
+        "data": {
+          "host": "Hub IP address",
+          "login": "Login",
+          "password": "Password"
+        },
+        "data_description": {
+          "host": "Local IP address of the hub, e.g. `192.168.1.50`. Give the hub a fixed (reserved) address in your router.",
+          "login": "The user name you sign in with in the Be Wave app. Device control requires a user with rights to those devices (typically the administrator).",
+          "password": "Password of that user. It is stored only in Home Assistant and sent to the hub encrypted."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Sign in again",
+        "description": "The hub at {host} rejected the stored login — the password was probably changed in the Be Wave app. Enter the current one. Home Assistant keeps its registered device, so no new device slot is used.",
+        "data": {
+          "login": "Login",
+          "password": "Password"
+        },
+        "data_description": {
+          "login": "The user name you sign in with in the Be Wave app. Device control requires a user with rights to those devices (typically the administrator).",
+          "password": "The new password of this user."
+        }
+      },
+      "reconfigure": {
+        "title": "Change hub address",
+        "description": "Use this when the hub got a new IP address. Login and the registered device are kept.",
+        "data": {
+          "host": "Hub IP address"
+        },
+        "data_description": {
+          "host": "New local IP address of the same hub."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot reach the hub. Check the IP address and that Home Assistant is on the same network (TCP port 4200 must be reachable).",
+      "invalid_auth": "The hub rejected the login or password.",
+      "device_limit": "This user has no free mobile-device slot on the hub. In the Be Wave app remove an unused mobile device of this user and try again."
+    },
+    "abort": {
+      "already_configured": "This BE WAVE hub is already set up.",
+      "reauth_successful": "Signed in again — the integration is reloading.",
+      "reconfigure_successful": "Hub address updated.",
+      "wrong_hub": "The hub at this address is a different one (other serial number) than the one configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "BE WAVE options",
+        "description": "Choose which protection mode the alarm panel entity arms and disarms.",
+        "data": {
+          "mode": "Protection mode"
+        },
+        "data_description": {
+          "mode": "Key of the protection mode on the hub. `defau` is the default mode (whole object). You can type the key of another mode configured in the Be Wave app."
+        }
+      }
+    }
+  },
+  "selector": {
+    "mode": {
+      "options": {
+        "defau": "Default mode (defau)"
+      }
+    }
+  }
+}
