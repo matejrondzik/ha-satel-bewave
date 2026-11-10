@@ -144,6 +144,16 @@
       "keypad_blocked": {
         "name": "Blokovanie klávesnice"
       }
+    },
+    "light": {
+      "luna_light": {
+        "name": "Svetlo"
+      }
+    },
+    "number": {
+      "optical_duration": {
+        "name": "Čas svietenia"
+      }
     }
   }
 }

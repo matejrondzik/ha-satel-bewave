@@ -1,5 +1,6 @@
 """BE WAVE (Satel) integration for Home Assistant."""
 from __future__ import annotations
+import asyncio
 import contextlib
 import logging
 import secrets
@@ -8,7 +9,7 @@ import time
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.helpers import device_registry as dr
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -19,7 +20,7 @@ from .const import (DOMAIN, CONF_LOGIN, CONF_PASSWORD, CONF_HOST, CONF_SERIAL,
 from . import bewave_client as proto
 
 _LOGGER = logging.getLogger(__name__)
-PLATFORMS = ["alarm_control_panel", "switch", "binary_sensor", "sensor", "climate", "select"]
+PLATFORMS = ["alarm_control_panel", "switch", "binary_sensor", "sensor", "climate", "select", "light", "number"]
 
 
 class BeWaveHub:
@@ -203,7 +204,7 @@ class BeWaveHub:
                 self.dev_names[did] = {k: d[k] for k in ("name", "room", "type", "model", "sysnum", "bypass", "hwtype")}
                 ds = self.dev_state.setdefault(did, {})
                 for k in ("signal", "battery", "state", "temp", "type", "volt", "on_off", "heater", "errors",
-                          "keypad_block"):
+                          "keypad_block", "options", "raw"):
                     if d.get(k) is not None:
                         ds[k] = d[k]
             for did, d in proto.parse_telemetry(pt).items():
@@ -230,7 +231,8 @@ class BeWaveHub:
                         "battery": st.get("battery"), "signal": st.get("signal"),
                         "volt": st.get("volt"), "hwtype": nm.get("hwtype"),
                         "on_off": st.get("on_off"), "heater": st.get("heater"),
-                        "errors": st.get("errors"), "keypad_block": st.get("keypad_block")})
+                        "errors": st.get("errors"), "keypad_block": st.get("keypad_block"),
+                        "options": st.get("options"), "raw": st.get("raw")})
         return out
 
     def _command(self, send, verify=None):
@@ -357,7 +359,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         sw_version=hub.info.get("firmware"),
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    _register_debug_service(hass)
     return True
+
+
+def _register_debug_service(hass: HomeAssistant) -> None:
+    """Temporary RE helper: send one raw DeviceStateUpdate patch through the
+    integration's own session and return the device's raw state before/after."""
+    if hass.services.has_service(DOMAIN, "debug_patch"):
+        return
+
+    async def _handle(call: ServiceCall):
+        hub: BeWaveHub = next(iter(hass.data[DOMAIN].values()))["hub"]
+        devid, cmd = int(call.data["device"]), int(call.data["command"])
+        kw = {k: call.data[k] for k in ("boolean", "number", "flt") if k in call.data}
+        st = lambda: dict(hub.dev_state.get(devid, {}))
+        before = st()
+        ok = await hass.async_add_executor_job(lambda: hub.set_patch(devid, cmd, **kw))
+        await asyncio.sleep(float(call.data.get("wait", 3)))
+        after = st()
+        return {"ok": ok, "options": after.get("options"),
+                "before": before.get("raw"), "after": after.get("raw"),
+                "on_off": [before.get("on_off"), after.get("on_off")]}
+
+    hass.services.async_register(DOMAIN, "debug_patch", _handle,
+                                 supports_response=SupportsResponse.OPTIONAL)
 
 
 async def _async_reload(hass: HomeAssistant, entry: ConfigEntry) -> None:

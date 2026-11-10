@@ -46,6 +46,9 @@ DEV_TYPES = {0x10002: "keyfob", 0x10003: "motion", 0x10007: "contact",
 VIRTUAL_IP_DEVICE = 69
 ART_210 = 35                     # thermostatic radiator head
 SET_ON_OFF = 1
+SET_ALARM_OPTICAL_DURATION = 21  # number, seconds (app allows 0..180)
+ALARM_OPTICAL_DURATION_FIELD = 23
+LUNA_TYPES = {58, 59, 61, 62, 79, 80}   # SLIM-*-LUNA-* detectors with a light ring
 SET_HEATER_WORKING_MODE = 60     # number: 0 manual, 1 schedule, 2 eco
 SET_HEATER_FORCED_VALUE = 61     # Float: active target temperature
 SET_HEATER_BOOST = 107           # boolean
@@ -253,6 +256,9 @@ def _telem_from_block(f3block, f2list, errs=None):
             "heater": _heater(f3),
             # HubDeviceState.Settings.keypadBlock (f112): keypad locked by the hub
             "keypad_block": (f3.get(112, [0])[0] == 1) if f3 else None,
+            # f1 = packed list of supported HubDeviceState_Settings_Command values
+            "options": packed_ints(f3.get(1)) if f3 and 1 in f3 else None,
+            "raw": {k: v[0] for k, v in f3.items() if k != 1 and isinstance(v[0], int)} if f3 else None,
             "errors": packed_ints(errs) if errs is not None else None}
 
 
@@ -313,7 +319,8 @@ def parse_config_devices(plaintext):
                           "signal": tel.get("signal"), "battery": tel.get("battery"),
                           "state": tel.get("state"), "temp": tel.get("temp"),
                           "volt": tel.get("volt"), "errors": tel.get("errors"),
-                          "keypad_block": tel.get("keypad_block")}
+                          "keypad_block": tel.get("keypad_block"),
+                          "options": tel.get("options"), "raw": tel.get("raw")}
     return out
 
 # ---------- framing ----------

@@ -144,6 +144,16 @@
       "keypad_blocked": {
         "name": "Keypad lockout"
       }
+    },
+    "light": {
+      "luna_light": {
+        "name": "Light"
+      }
+    },
+    "number": {
+      "optical_duration": {
+        "name": "Light-on time"
+      }
     }
   }
 }
