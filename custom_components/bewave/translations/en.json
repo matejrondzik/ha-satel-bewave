@@ -107,6 +107,23 @@
           }
         }
       }
+    },
+    "sensor": {
+      "valve_opening": {
+        "name": "Valve opening"
+      }
+    },
+    "select": {
+      "heating_mode": {
+        "name": "Heating mode (whole house)",
+        "state": {
+          "manual": "Manual",
+          "schedule": "Schedule",
+          "eco": "Eco",
+          "boost": "Boost",
+          "mixed": "Mixed"
+        }
+      }
     }
   }
 }

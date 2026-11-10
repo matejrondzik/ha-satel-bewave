@@ -15,6 +15,32 @@ from .const import DOMAIN
 PRESET_BOOST = "boost"
 MODE_TO_PRESET = proto.HEATER_MODES                     # 0 manual, 1 schedule, 2 eco
 PRESET_TO_MODE = {v: k for k, v in MODE_TO_PRESET.items()}
+PRESETS = [*MODE_TO_PRESET.values(), PRESET_BOOST]
+
+
+def heater_of(hub, devid) -> dict:
+    for d in hub.devices():
+        if d["id"] == devid:
+            return d.get("heater") or {}
+    return {}
+
+
+def preset_of(heater: dict) -> str | None:
+    if heater.get("boost"):
+        return PRESET_BOOST
+    return MODE_TO_PRESET.get(heater.get("mode"))
+
+
+def apply_preset(hub, devid, preset: str) -> None:
+    """Blocking: switch one head to a preset (shared by the thermostat and the house-wide select)."""
+    h = lambda: heater_of(hub, devid)
+    if preset == PRESET_BOOST:
+        hub.set_patch(devid, proto.SET_HEATER_BOOST, boolean=True, verify=lambda: h().get("boost") is True)
+        return
+    mode = PRESET_TO_MODE[preset]
+    if h().get("boost"):
+        hub.set_patch(devid, proto.SET_HEATER_BOOST, boolean=False, verify=lambda: h().get("boost") is False)
+    hub.set_patch(devid, proto.SET_HEATER_WORKING_MODE, number=mode, verify=lambda: h().get("mode") == mode)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
@@ -46,7 +72,7 @@ class BeWaveThermostat(CoordinatorEntity, ClimateEntity):
     _attr_min_temp = 5.0
     _attr_max_temp = 30.0
     _attr_target_temperature_step = 0.5
-    _attr_preset_modes = [*MODE_TO_PRESET.values(), PRESET_BOOST]
+    _attr_preset_modes = PRESETS
     _attr_supported_features = (ClimateEntityFeature.TARGET_TEMPERATURE
                                 | ClimateEntityFeature.PRESET_MODE)
 
@@ -96,10 +122,7 @@ class BeWaveThermostat(CoordinatorEntity, ClimateEntity):
 
     @property
     def preset_mode(self):
-        h = self._heater()
-        if h.get("boost"):
-            return PRESET_BOOST
-        return MODE_TO_PRESET.get(h.get("mode"))
+        return preset_of(self._heater())
 
     @property
     def extra_state_attributes(self):
@@ -122,19 +145,7 @@ class BeWaveThermostat(CoordinatorEntity, ClimateEntity):
         self.async_write_ha_state()
 
     async def async_set_preset_mode(self, preset_mode: str):
-        if preset_mode == PRESET_BOOST:
-            await self.hass.async_add_executor_job(
-                lambda: self._hub.set_patch(self._devid, proto.SET_HEATER_BOOST, boolean=True,
-                                            verify=lambda: self._heater().get("boost") is True))
-        else:
-            mode = PRESET_TO_MODE[preset_mode]
-            def _run():
-                if self._heater().get("boost"):
-                    self._hub.set_patch(self._devid, proto.SET_HEATER_BOOST, boolean=False,
-                                        verify=lambda: self._heater().get("boost") is False)
-                self._hub.set_patch(self._devid, proto.SET_HEATER_WORKING_MODE, number=mode,
-                                    verify=lambda: self._heater().get("mode") == mode)
-            await self.hass.async_add_executor_job(_run)
+        await self.hass.async_add_executor_job(apply_preset, self._hub, self._devid, preset_mode)
         self.async_write_ha_state()
 
     async def async_set_hvac_mode(self, hvac_mode):

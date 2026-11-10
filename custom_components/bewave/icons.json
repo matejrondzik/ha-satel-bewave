@@ -14,6 +14,23 @@
           }
         }
       }
+    },
+    "select": {
+      "heating_mode": {
+        "default": "mdi:home-thermometer",
+        "state": {
+          "manual": "mdi:hand-back-right",
+          "schedule": "mdi:calendar-clock",
+          "eco": "mdi:leaf",
+          "boost": "mdi:rocket-launch",
+          "mixed": "mdi:shuffle-variant"
+        }
+      }
+    },
+    "sensor": {
+      "valve_opening": {
+        "default": "mdi:valve"
+      }
     }
   }
 }

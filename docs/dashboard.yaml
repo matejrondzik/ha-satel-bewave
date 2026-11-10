@@ -1,24 +1,40 @@
 # BE WAVE dashboard view – native Home Assistant cards only (no HACS cards needed).
 # Dashboard → ⋮ → Edit → ⋮ → Raw configuration editor, paste under `views:`
-# and replace the entity ids with yours (Settings → Entities, filter: bewave).
+# and replace the entity ids with yours (Settings → Entities, search: bewave).
 views:
 - title: Security
   path: security
   icon: mdi:shield-home
   type: sections
   max_columns: 3
+  badges:
+  - type: entity
+    entity: alarm_control_panel.bewave_alarm
+    show_name: false
+    show_state: true
+    show_icon: true
+  - type: entity
+    entity: select.bewave_heating_mode_whole_house
+    show_name: false
+    show_state: true
+    show_icon: true
+  - type: entity
+    entity: climate.bewave_living_room_radiator
+    show_name: true
+    show_state: true
+    show_icon: true
+    name: Living room
+    state_content: current_temperature
   sections:
   - type: grid
     cards:
     - type: heading
       heading: Alarm
-      icon: mdi:shield-home
       heading_style: title
+      icon: mdi:shield-home
     - type: tile
       entity: alarm_control_panel.bewave_alarm
-      name: BE WAVE hub
-      vertical: false
-      features_position: bottom
+      name: Alarm
       state_content:
       - state
       - last_changed
@@ -29,30 +45,56 @@ views:
         modes:
         - armed_away
         - disarmed
+      features_position: bottom
     - type: heading
       heading: Motion
       heading_style: subtitle
+      icon: mdi:motion-sensor
     - type: tile
       entity: binary_sensor.bewave_hallway_motion
       name: Hallway
-      state_content:
-      - state
-      - last_changed
+      vertical: true
+      state_content: last_changed
+      grid_options:
+        columns: 6
     - type: tile
       entity: binary_sensor.bewave_living_room_motion
       name: Living room
+      vertical: true
+      state_content: last_changed
+      grid_options:
+        columns: 6
+    - type: heading
+      heading: Virtual devices
+      heading_style: subtitle
+      icon: mdi:swap-horizontal-bold
+    - type: tile
+      entity: switch.bewave_leaving_home
+      name: Leaving home
       state_content:
       - state
       - last_changed
+      grid_options:
+        columns: 12
+      tap_action:
+        action: toggle
   - type: grid
     cards:
     - type: heading
       heading: Heating
-      icon: mdi:radiator
       heading_style: title
+      icon: mdi:radiator
+    - type: tile
+      entity: select.bewave_heating_mode_whole_house
+      name: Whole house
+      grid_options:
+        columns: 12
+      features_position: inline
+      features:
+      - type: select-options
     - type: thermostat
       entity: climate.bewave_living_room_radiator
-      name: Living room radiator
+      name: Living room
       show_current_as_primary: true
       features:
       - type: climate-preset-modes
@@ -63,24 +105,19 @@ views:
         - eco
         - boost
     - type: tile
-      entity: climate.bewave_living_room_radiator
+      entity: sensor.living_room_radiator_valve_opening
       name: Valve
-      icon: mdi:valve
-      state_content:
-      - hvac_action
-      - valve_opening
-      tap_action:
-        action: more-info
-    - type: tile
-      entity: sensor.bewave_living_room_radiator_battery
-      name: Head battery
-      hide_state: false
+      grid_options:
+        columns: 12
+      features:
+      - type: bar-gauge
+      features_position: inline
   - type: grid
     cards:
     - type: heading
       heading: Temperatures
-      icon: mdi:thermometer
       heading_style: title
+      icon: mdi:thermometer
     - type: tile
       entity: sensor.bewave_living_room_temperature
       name: Living room
@@ -101,42 +138,26 @@ views:
       grid_options:
         columns: 6
         rows: 2
-  - type: grid
-    cards:
-    - type: heading
-      heading: Virtual devices
-      icon: mdi:swap-horizontal-bold
-      heading_style: title
-    - type: tile
-      entity: switch.bewave_leaving_home
-      name: Leaving home
-      features:
-      - type: toggle
-      features_position: inline
-      state_content:
-      - state
-      - last_changed
-      grid_options:
-        columns: 12
-  - type: grid
-    cards:
     - type: heading
       heading: Hub
-      icon: mdi:router-wireless
       heading_style: title
+      icon: mdi:router-wireless
     - type: tile
       entity: switch.bewave_led
-      name: Status LED
+      name: LED
+      vertical: true
       icon: mdi:led-on
-      features:
-      - type: toggle
-      features_position: inline
+      tap_action:
+        action: toggle
       grid_options:
-        columns: 12
+        columns: 4
     - type: tile
       entity: switch.bewave_grade_2
       name: Grade 2
+      vertical: true
       icon: mdi:shield-star
+      grid_options:
+        columns: 4
       tap_action:
         action: toggle
         confirmation:
@@ -147,19 +168,30 @@ views:
           text: Change the Grade 2 mode of the hub?
     - type: tile
       entity: switch.bewave_satel_server
-      name: SATEL cloud
+      name: SATEL
+      vertical: true
       icon: mdi:cloud-lock
+      grid_options:
+        columns: 4
       tap_action:
         action: toggle
         confirmation:
-          text: Change the hub's SATEL cloud connection? Without it the app does not work away from home.
+          text: Change the hub's SATEL cloud connection? Without it the Be Wave app does not work away from home.
       icon_tap_action:
         action: toggle
         confirmation:
-          text: Change the hub's SATEL cloud connection? Without it the app does not work away from home.
+          text: Change the hub's SATEL cloud connection? Without it the Be Wave app does not work away from home.
     - type: heading
       heading: Batteries
       heading_style: subtitle
+      icon: mdi:battery-heart-variant
     - type: tile
       entity: sensor.bewave_hallway_battery
       name: Hallway detector
+      grid_options:
+        columns: 12
+    - type: tile
+      entity: sensor.bewave_living_room_radiator_battery
+      name: Living room head
+      grid_options:
+        columns: 12

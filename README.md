@@ -23,8 +23,9 @@ using the same encrypted protocol as the Be Wave mobile app.
 |---|---|
 | `alarm_control_panel` | Arm away / disarm the chosen protection mode, live state pushed from the hub |
 | `binary_sensor` | Detectors (PIR, door/window, BUS detectors) – violation, tamper |
-| `sensor` | Temperature, battery, signal and voltage of wireless devices; hub power and storage |
+| `sensor` | Temperature and battery of wireless devices, **valve opening** of thermostat heads |
 | `climate` | **ART-210 thermostat heads**: target temperature, current temperature, valve position, presets *manual / schedule / eco / boost* |
+| `select` | **Heating mode (whole house)**: one control that switches every thermostat head (manual / schedule / eco / boost), including heads added later. Shows *Mixed* when the heads differ. |
 | `switch` | **Virtual IP devices** created in the Be Wave app, two-way; hub settings (status LED, Grade 2, Satel cloud) |
 
 State changes are **pushed** by the hub (~1 s), so automations react immediately. Typical uses:

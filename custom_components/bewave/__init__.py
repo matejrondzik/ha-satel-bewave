@@ -19,7 +19,7 @@ from .const import (DOMAIN, CONF_LOGIN, CONF_PASSWORD, CONF_HOST, CONF_SERIAL,
 from . import bewave_client as proto
 
 _LOGGER = logging.getLogger(__name__)
-PLATFORMS = ["alarm_control_panel", "switch", "binary_sensor", "sensor", "climate"]
+PLATFORMS = ["alarm_control_panel", "switch", "binary_sensor", "sensor", "climate", "select"]
 
 
 class BeWaveHub:

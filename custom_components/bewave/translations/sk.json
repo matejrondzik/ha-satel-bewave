@@ -107,6 +107,23 @@
           }
         }
       }
+    },
+    "sensor": {
+      "valve_opening": {
+        "name": "Otvorenie ventilu"
+      }
+    },
+    "select": {
+      "heating_mode": {
+        "name": "Režim kúrenia (celý dom)",
+        "state": {
+          "manual": "Ručne",
+          "schedule": "Podľa plánu",
+          "eco": "Úsporne",
+          "boost": "Boost",
+          "mixed": "Rôzne"
+        }
+      }
     }
   }
 }
