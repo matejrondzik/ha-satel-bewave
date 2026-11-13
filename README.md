@@ -22,11 +22,48 @@ using the same encrypted protocol as the Be Wave mobile app.
 | Platform | What you get |
 |---|---|
 | `alarm_control_panel` | Arm away / disarm the chosen protection mode, live state pushed from the hub |
-| `binary_sensor` | Detectors (PIR, door/window, BUS detectors); **tamper** and **trouble** of the hub and of every device, with readable trouble descriptions (e.g. *Tamper (cover open)*, *Valve out of range*, *Low battery*) |
-| `sensor` | Temperature and battery of wireless devices, **valve opening** of thermostat heads |
-| `climate` | **ART-210 thermostat heads**: target temperature, current temperature, valve position, presets *manual / schedule / eco / boost* |
+| `binary_sensor` | Detectors (PIR, door/window, BUS detectors), **flood detectors** (AFD-200), **wired zone inputs** of the panel (Z1, Z2, … – e.g. a smoke detector or a door contact; pick the device class in HA), **keypad lockout**; **tamper** and **trouble** of the hub and of every device, with readable descriptions (e.g. *Tamper (cover open)*, *Valve out of range*, *Low battery*) |
+| `sensor` | Temperature, battery, signal and supply voltage of devices, **valve opening** of thermostat heads |
+| `climate` | **ART-210 thermostat heads**: target temperature (0.1 °C), room temperature from the head's reference sensor, valve-based HVAC action, presets *manual / schedule / eco / boost*, schedule name |
+| `number` | Head settings: day / night / eco / manual temperature, **temperature offset**, boost time; temperature offset of detectors; light-on time of SLIM LUNA detectors |
 | `select` | **Heating mode (whole house)**: one control that switches every thermostat head (manual / schedule / eco / boost), including heads added later. Shows *Mixed* when the heads differ. |
-| `switch` | **Virtual IP devices** created in the Be Wave app, two-way; hub settings (status LED, Grade 2, Satel cloud) |
+| `switch` | **Virtual IP devices** created in the Be Wave app and **panel outputs** (O1, O2, … – e.g. a boiler or a gate opener; attribute `output_type` = `bi` / `mono`), two-way; hub settings (status LED, Grade 2, Satel cloud) |
+| `light` | Light ring of **SLIM LUNA** detectors |
+
+### Supported devices
+
+| Device | Tested | Entities |
+|---|---|---|
+| HYBRID 128 Plus panel (fw 1.05) | ✅ | alarm, tamper/trouble, outputs O1/O2 (switch), wired zones Z1/Z2 (binary sensor) |
+| ART-210 thermostat head | ✅ | climate, numbers, valve opening, battery |
+| APD-200 / APMD-250 detectors | ✅ | motion, temperature, offset, battery, signal |
+| SLIM-PIR-LUNA-BUS | ✅ | motion, temperature, light ring, light-on time |
+| AFD-200 flood detector | ✅ | moisture, battery |
+| TSG2R keypad | ✅ | keypad lockout, tamper/trouble |
+| Virtual IP device | ✅ | switch |
+| APT-210 key fob | – | tamper/trouble only |
+| Other BE WAVE devices | ❔ | appear with tamper/trouble; open an issue with diagnostics to add them |
+
+### Services
+
+| Service | What it does |
+|---|---|
+| `bewave.save_schedule` | Create or edit a heating schedule on the hub (weekly time windows, shared by all heads) |
+| `bewave.delete_schedule` | Delete a schedule no head uses |
+| `bewave.assign_schedule` | Give a head a schedule and optionally switch it to *schedule* mode |
+
+Schedules (id, name, windows) are in the `schedules` attribute of every thermostat. Example:
+
+```yaml
+action: bewave.save_schedule
+target:
+  entity_id: climate.radiator_living_room
+data:
+  name: Weekdays
+  days:            # 0 = Monday … 6 = Sunday; inside a window the head heats to its day temperature
+    "0": [["06:00", "08:00"], ["16:00", "22:00"]]
+    "5": [["08:00", "22:00"]]
+```
 
 State changes are **pushed** by the hub (~1 s), so automations react immediately. Typical uses:
 
@@ -101,6 +138,12 @@ Paste it via *Dashboard → Edit → Raw configuration editor* and replace the e
 - **Thermostat heads:** *manual* sets a fixed temperature and *schedule* follows the Be Wave
   schedule. *Eco* uses the eco temperature. *Boost* opens the valve for the boost time set in
   the app.
+- **Panel outputs** set to *mono* in the Be Wave app give a pulse timed by the hub – turning the
+  switch on is enough (e.g. a gate opener). *Bi* outputs stay on until turned off.
+- **Wired zones** have no fixed type in the protocol: set the device class (smoke, door, garage
+  door, …) in the entity settings in Home Assistant.
+- **The hub drops a command that comes right after another one** – the integration keeps a gap
+  of 1.5 s between commands and verifies each change, so large automations are slower than the app.
 - **Not supported (yet):** bypassing zones, editing scenarios, and blinds/dimmers modules
   (the protocol has the commands, but they are untested).
 - The integration **never** sends firmware update, restart or factory-reset commands.
@@ -120,7 +163,22 @@ Compared with the original v0.4.4 by @slaveitgr:
   when the password changes.
 - **Setup flow:** fewer fields with explanations, specific error messages, reauth,
   reconfigure, options with protection mode, diagnostics, and English and Slovak translations.
+- **Panel I/O:** outputs and wired zones of the main board (composite device keys), flood detectors,
+  LUNA light rings, head settings, detector offsets, heating schedules.
 - **Protocol notes** in [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
+
+## Contributing
+
+Pull requests and new devices are welcome.
+
+- Protocol notes: [`docs/PROTOCOL.md`](docs/PROTOCOL.md). `bewave_client.py` is self-contained and can be run
+  from the command line (`python3 bewave_client.py status --host … --login … --password …`).
+- Tests: `pip install pytest cryptography && pytest` (protocol helpers, no hub needed).
+- **Mapping a new device:** enable *Developer services* in the integration options. `bewave.debug_patch`
+  sends one setting to a device and returns its raw state before / after; `bewave.debug_send` with empty
+  `hex` saves the raw configuration to `bewave_last_raw.json`. Attach the diagnostics file to the issue.
+- **Never** send `SystemTrigger` messages (fields 1–3 restart / reset the hub) and never test on a panel
+  that protects a home you are not allowed to disturb.
 
 ## Troubleshooting
 

@@ -55,7 +55,14 @@ with the value in `boolean 10`, `number 11`, `string 12` or `float 13` (fixed32)
 | 62 / 63 / 64 | float | day / night / eco temperature |
 | 104 | float | manual temperature |
 | 107 HEATER_BOOST | bool | boost |
+| 21 ALARM_OPTICAL_DURATION | number | LUNA light-on time after motion, s (0–180) |
+| 50 SET_SCHEDULE | string | schedule id of a head (`""` = none) |
+| 65 | number | boost time, ms |
+| 66 | float | temperature offset (heads and detectors) |
 | 124 FIND_ME | – | identify device |
+
+**The hub drops a command that arrives within ~1 s of the previous one**, and closes the session on a
+request that bundles several patches. Send one patch per message, ≥ 1.5 s apart, and verify the state.
 
 The device state lists the commands it supports in field 1 (packed). Other state fields:
 3 signal, 4 battery, 5 on/off, 9 violation, 60–68 heater, 97 boost, 109 valve opening,
@@ -73,3 +80,27 @@ The device state lists the commands it supports in field 1 (packed). Other state
   6 ETHERNET_CABLE_DISCONNECTED, 7 PROBLEM_WITH_WIFI, 40 PROBLEM_WITH_SATEL_CLOUD, … (see `HUB_ERRORS`).
 - **Device:** `HubDeviceState` field **1** = `HubDeviceState.ErrorCode`s (packed): 0 CONNECTION_FAILURE,
   2 TAMPER, 4 BATTERY_LOW, 12 MASKING, 26 DEV_ART_VALVE_OVER_RANGE, … (see `DEV_ERRORS`).
+
+## Hub main board: outputs and wired zones
+
+Outputs (O1, O2, …) and wired zone inputs (Z1, Z2, …) of the panel's main board share the device
+uuid **1** and differ by `HubDeviceKey` field **2** (index): zones Z1 = 1, Z2 = 2; outputs O1 = 5,
+O2 = 6. A patch must carry both fields, otherwise the hub ignores it or drops the session. The
+integration uses composite ids `uuid * 1000 + index` (1001, 1002, 1005, 1006).
+
+- **Outputs**: options contain 1 SET_ON_OFF; device config field **30** = reaction type
+  0 SWITCH_BI, 1 SWITCH_MONO (pulse timed by the hub), 2/3 thermostat heating/cooling, 4 alarm.
+- **Zones**: options contain **110**; state field 9 = violated. The zone type (smoke, contact, …) is
+  not exposed, so the user sets the device class in Home Assistant.
+
+## Heating schedules
+
+`StructureGetSchedule` (subscribe 46) → field **47** `{1 {1 [HubSchedule]}}`;
+`StructureUpdateSchedule` field **50** with the **whole** list replaces it (reply 51).
+`HubSchedule {1 id (string), 2 name, 3 [entry {1 day (0 = Monday, omitted for 0), 2 [range {1 start {1 h, 2 m}, 2 end {…}}]}]}`.
+A schedule has no temperatures: inside a window a head in schedule mode heats to its day
+temperature, outside to the night one. Heads reference a schedule by patch 50 (string id).
+
+## Never send
+
+`SystemTrigger` (fields 1–3: restart, factory reset, firmware update). The integration never sends them.
