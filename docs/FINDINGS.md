@@ -77,7 +77,7 @@ devices. They explain most "why does it work like this" questions. Protocol deta
 ## Keypads
 
 - Keypad lockout after wrong codes is state field 112. Event history is available (`SystemEvent` 32) with
-  readable messages such as "Armed by user - admin".
+  readable messages such as "Armed by user - <name>".
 - NFC cards and keypad codes have their own messages - not edited by this integration on purpose.
 
 ## Hub
