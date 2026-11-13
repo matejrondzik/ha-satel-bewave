@@ -1,9 +1,7 @@
 MIT License
 
-Copyright (c) 2026 slaveitgr and BE WAVE HA contributors (original integration,
-                   https://github.com/slaveitgr/Satel_BeWAVE_Home_Assistant-)
-Copyright (c) 2026 Matej Rondzik (HYBRID support, device control, thermostats,
-                   setup flow and protocol documentation)
+Copyright (c) 2026 slaveitgr and contributors
+Copyright (c) 2026 Matej Rondzik
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
