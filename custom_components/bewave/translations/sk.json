@@ -220,7 +220,7 @@
         },
         "days": {
           "name": "Dni",
-          "description": "{\"0\": [[\"08:00\", \"20:00\"]], …} – 0 = pondelok … 6 = nedeľa, najviac 8 okien za deň."
+          "description": "Číslo dňa (0 = pondelok … 6 = nedeľa) → zoznam okien [začiatok, koniec] v HH:MM, najviac 8 za deň. Pozri príklad."
         }
       }
     },

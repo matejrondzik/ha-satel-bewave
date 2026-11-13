@@ -220,7 +220,7 @@
         },
         "days": {
           "name": "Days",
-          "description": "{\"0\": [[\"08:00\", \"20:00\"]], …} - 0 = Monday … 6 = Sunday, at most 8 windows a day."
+          "description": "Day number (0 = Monday … 6 = Sunday) → list of [start, end] windows in HH:MM, at most 8 a day. See the example."
         }
       }
     },
