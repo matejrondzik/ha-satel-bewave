@@ -468,6 +468,71 @@ class BeWaveAuthError(BeWaveError):
 class BeWaveDeviceLimitError(BeWaveError):
     """Hub refused a new mobile-device token: per-user slot limit reached (header error 31)."""
 
+# ---------- discovery (UDP 4111, plaintext, no keys needed) ----------
+# The app broadcasts an unencrypted TransportMessage with SystemPing (24); every hub on the LAN answers
+# with SystemPing response (25) -> payload 1 = Details {localIdentifier 1 (= serial used at sign-in),
+# connectionParameters 2 ("ip:port"), noUsers 3, name 4, timezoneSet 5, interfacesSet 6,
+# deviceDescription 7 {…, 9 firmware}}. A ping changes nothing on the hub.
+DISCOVERY_PORT = 4111
+DISCOVERY_PING = pb_bytes(24, pb_bytes(1, b""))
+
+
+def parse_discovery(data, addr_ip=None):
+    """One UDP reply -> {serial, host, port, name, no_users, firmware} or None."""
+    try:
+        top = pb_read(data)
+        det = pb_read(pb_read(top[25][0])[1][0])
+    except Exception:  # noqa: BLE001 - not a hub reply
+        return None
+    serial = _s(det.get(1, [b""])[0]) if 1 in det else ""
+    if not serial:
+        return None
+    host, port = addr_ip, DATA_PORT
+    cp = _s(det.get(2, [b""])[0]) if 2 in det else ""
+    if ":" in cp:
+        h, _, pt = cp.rpartition(":")
+        host = h or host
+        port = int(pt) if pt.isdigit() else port
+    fw = None
+    if 7 in det:
+        try:
+            fw = _s(pb_read(det[7][0]).get(9, [b""])[0]) or None
+        except Exception:  # noqa: BLE001
+            fw = None
+    return {"serial": serial, "host": host, "port": port,
+            "name": _s(det.get(4, [b""])[0]) if 4 in det else "",
+            "no_users": bool(det.get(3, [0])[0]), "firmware": fw}
+
+
+def discover(targets=("255.255.255.255",), timeout=2.0):
+    """Broadcast the discovery ping to every target address, collect replies for `timeout` s.
+    Returns {serial: info}. Blocking - run in an executor."""
+    found = {}
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        sock.settimeout(0.3)
+        for t in targets:
+            try:
+                sock.sendto(DISCOVERY_PING, (t, DISCOVERY_PORT))
+            except OSError:
+                pass
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            try:
+                data, addr = sock.recvfrom(4096)
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+            info = parse_discovery(data, addr[0])
+            if info:
+                found[info["serial"]] = info
+    finally:
+        sock.close()
+    return found
+
+
 # header f10 error codes seen during sign-in
 SIGNIN_ERR_AUTH = 102
 SIGNIN_ERR_DEVICE_LIMIT = 31

@@ -37,6 +37,13 @@
         "data_description": {
           "host": "New local IP address of the same hub."
         }
+      },
+      "pick": {
+        "title": "BE WAVE hubs found",
+        "description": "These hubs answered on your network. Pick one or enter the address yourself.",
+        "data": {
+          "hub": "Hub"
+        }
       }
     },
     "error": {
@@ -53,7 +60,7 @@
   },
   "options": {
     "step": {
-      "init": {
+      "general": {
         "title": "BE WAVE options",
         "description": "Choose which protection mode the alarm panel entity arms and disarms.",
         "data": {
@@ -64,6 +71,17 @@
           "mode": "Key of the protection mode on the hub. `defau` is the default mode (whole object). You can type the key of another mode configured in the Be Wave app.",
           "developer_services": "Registers `bewave.debug_patch` and `bewave.debug_send` (raw protocol messages). Only for mapping new devices - a wrong message can restart or reset the hub."
         }
+      },
+      "init": {
+        "title": "BE WAVE options",
+        "menu_options": {
+          "general": "General",
+          "zones": "Wired zones (Z1, Z2, …)"
+        }
+      },
+      "zones": {
+        "title": "Wired zones",
+        "description": "The panel only reports whether a wired zone is violated. Choose what is connected to each zone - Home Assistant then shows it with the right icon and states (e.g. *Detected* / *Clear* for smoke, *Open* / *Closed* for a gate)."
       }
     }
   },
@@ -71,6 +89,30 @@
     "mode": {
       "options": {
         "defau": "Default mode (defau)"
+      }
+    },
+    "zone_class": {
+      "options": {
+        "none": "Nothing / plain on-off",
+        "smoke": "Smoke detector",
+        "door": "Door",
+        "garage_door": "Garage door / gate",
+        "window": "Window",
+        "opening": "Other opening",
+        "motion": "Motion",
+        "moisture": "Water / flood",
+        "gas": "Gas",
+        "heat": "Heat",
+        "carbon_monoxide": "Carbon monoxide",
+        "vibration": "Vibration",
+        "tamper": "Tamper",
+        "problem": "Fault / problem",
+        "safety": "Other safety"
+      }
+    },
+    "pick": {
+      "options": {
+        "manual": "Enter the IP address manually"
       }
     }
   },
@@ -293,6 +335,22 @@
         "wait": {
           "name": "Wait (s)",
           "description": "How long to collect replies."
+        }
+      }
+    }
+  },
+  "issues": {
+    "zone_types": {
+      "title": "Choose what is connected to wired zones",
+      "fix_flow": {
+        "step": {
+          "zones": {
+            "title": "Wired zones",
+            "description": "Wired zones of the BE WAVE panel have no type yet: {zones}. Choose what is connected to them so they show the right icon and states."
+          }
+        },
+        "abort": {
+          "not_loaded": "The BE WAVE integration is not loaded - try again when it is running."
         }
       }
     }

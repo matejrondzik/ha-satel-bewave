@@ -22,7 +22,7 @@ using the same encrypted protocol as the Be Wave mobile app.
 | Platform | What you get |
 |---|---|
 | `alarm_control_panel` | Arm away / disarm the chosen protection mode, live state pushed from the hub |
-| `binary_sensor` | Detectors (PIR, door/window, BUS detectors), **flood detectors** (AFD-200), **wired zone inputs** of the panel (Z1, Z2, … – e.g. a smoke detector or a door contact; pick the device class in HA), **keypad lockout**; **tamper** and **trouble** of the hub and of every device, with readable descriptions (e.g. *Tamper (cover open)*, *Valve out of range*, *Low battery*) |
+| `binary_sensor` | Detectors (PIR, door/window, BUS detectors), **flood detectors** (AFD-200), **wired zone inputs** of the panel (Z1, Z2, … – smoke detector, door, gate, … chosen in the setup), **keypad lockout**; **tamper** and **trouble** of the hub and of every device, with readable descriptions (e.g. *Tamper (cover open)*, *Valve out of range*, *Low battery*) |
 | `sensor` | Temperature, battery, signal and supply voltage of devices, **valve opening** of thermostat heads |
 | `climate` | **ART-210 thermostat heads**: target temperature (0.1 °C), room temperature from the head's reference sensor, valve-based HVAC action, presets *manual / schedule / eco / boost*, schedule name |
 | `number` | Head settings: day / night / eco / manual temperature, **temperature offset**, boost time; temperature offset of detectors; light-on time of SLIM LUNA detectors |
@@ -101,14 +101,19 @@ Copy `custom_components/bewave/` into `config/custom_components/` and restart Ho
 
 ## Setup
 
-**Settings → Devices & services → Add integration → BE WAVE (Satel).** If the hub is on the
-same network, Home Assistant usually discovers it by itself (Satel MAC prefix) and offers it
-under *Discovered*.
+**Settings → Devices & services → Add integration → BE WAVE (Satel).**
 
-1. **Hub IP address.** Prefilled when discovered.
+1. **Find the hub.** Home Assistant searches the network the same way the Be Wave app does (UDP broadcast)
+   and lists the hubs it found with their name and firmware - pick one. Hubs are also found in the
+   background and offered under *Discovered*. If nothing is found (other VLAN), enter the IP address.
 2. **Login and password.** The same ones you use in the Be Wave app.
-3. Done. In the Be Wave app the user now has one more mobile device. That is Home Assistant;
-   do not delete it.
+3. **Done.** All devices of the hub are created automatically, with model names; devices added later in the
+   app appear by themselves. In the Be Wave app the user now has one more mobile device - that is Home
+   Assistant, do not delete it.
+4. **Wired zones.** If the panel has wired zones (Z1, Z2, …), *Settings → Repairs* asks what is connected
+   to them (smoke detector, door, garage door, …). You can change it later under *Configure → Wired zones*.
+
+If the hub gets a new IP address, the background search updates it automatically.
 
 Each problem gets a clear message: unreachable hub, wrong login or password, or *no free
 mobile-device slot* (remove an unused phone in the Be Wave app).
@@ -118,7 +123,8 @@ mobile-device slot* (remove an unused phone in the Be Wave app).
 |---|---|
 | Password changed in the Be Wave app | Home Assistant shows **Re-authenticate**. Enter the new password; no new device slot is used. |
 | Hub got a new IP address | Integration ⋮ → **Reconfigure** |
-| Arm / disarm a different protection mode | Integration → **Configure** → *Protection mode* (`defau` = default, whole object) |
+| Arm / disarm a different protection mode | Integration → **Configure** → *General* → *Protection mode* (`defau` = default, whole object) |
+| What is connected to wired zones | Integration → **Configure** → *Wired zones* |
 | Reporting a bug | Integration ⋮ → **Download diagnostics**. Credentials, serial number and device names are removed automatically. |
 
 ## Dashboard
@@ -147,8 +153,8 @@ Paste it via *Dashboard → Edit → Raw configuration editor* and replace the e
   the app.
 - **Panel outputs** set to *mono* in the Be Wave app give a pulse timed by the hub – turning the
   switch on is enough (e.g. a gate opener). *Bi* outputs stay on until turned off.
-- **Wired zones** have no fixed type in the protocol: set the device class (smoke, door, garage
-  door, …) in the entity settings in Home Assistant.
+- **Wired zones** have no type in the protocol - the integration asks what is connected to them
+  (*Repairs* after setup, or *Configure → Wired zones*).
 - **The hub drops a command that comes right after another one** – the integration keeps a gap
   of 1.5 s between commands and verifies each change, so large automations are slower than the app.
 - **Not supported (yet):** bypassing zones, editing scenarios, and blinds/dimmers modules

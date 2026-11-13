@@ -63,3 +63,19 @@ def test_message_encrypt_and_header():
     import struct
     iv = struct.pack(">III", fd[7], fd[6], fd[5])
     assert AESGCM(key).decrypt(iv, msg[body_at:], aad) == pt
+
+
+def test_discovery_reply():
+    # SystemPing response (25) -> payload 1 -> details, as a HYBRID answers on UDP 4111 (anonymised)
+    desc = proto.pb_varint(1, 6) + proto.pb_bytes(9, b"1.05")
+    det = (proto.pb_bytes(1, b"001B9C0000000000000000000ABCDEFGHIJ") + proto.pb_bytes(2, b"192.168.1.50:4200")
+           + proto.pb_bytes(4, "Home".encode()) + proto.pb_varint(5, 1) + proto.pb_bytes(7, desc))
+    data = proto.pb_bytes(1, proto.pb_bytes(8, b"\x01\x01")) + proto.pb_bytes(25, proto.pb_bytes(1, det))
+    info = proto.parse_discovery(data, "192.168.1.50")
+    assert info == {"serial": "001B9C0000000000000000000ABCDEFGHIJ", "host": "192.168.1.50", "port": 4200,
+                    "name": "Home", "no_users": False, "firmware": "1.05"}
+    assert proto.parse_discovery(b"\x08\x01", "1.2.3.4") is None
+
+
+def test_discovery_ping_is_plain_system_ping():
+    assert proto.pb_read(proto.DISCOVERY_PING) == {24: [proto.pb_bytes(1, b"")]}

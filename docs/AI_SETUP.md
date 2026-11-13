@@ -70,8 +70,11 @@ You are helping a user set up a **security system**. Follow these rules:
 - **HACS:** HACS → ⋮ → Custom repositories → `https://github.com/matejrondzik/ha-satel-bewave`, category
   *Integration* → download → restart.
 - **Manual:** copy `custom_components/bewave/` into `<config>/custom_components/`, restart.
-- **Add:** Settings → Devices & services → Add integration → *BE WAVE (Satel)*: hub IP, the login and password
-  of a Be Wave app user with rights to the devices (usually the administrator).
+- **Add:** Settings → Devices & services → Add integration → *BE WAVE (Satel)*. The integration scans the
+  network (UDP 4111) and lists the hubs found; then the login and password of a Be Wave app user with rights
+  to the devices (usually the administrator). No hub found = other VLAN / broadcast blocked → enter the IP.
+- **Wired zones:** after setup *Settings → Repairs* asks what is connected to Z1, Z2, … (later: Configure →
+  Wired zones). Ask the user - do not guess from names.
 - Errors: *cannot connect* = TCP 4200 not reachable (IP, VLAN, firewall); *invalid auth* = wrong login or
   password; *device limit* = the user already has 5 mobile devices → remove an unused one in the Be Wave app.
 - Home Assistant appears in the Be Wave app as one more mobile device of that user. It must not be deleted.
@@ -86,7 +89,7 @@ You are helping a user set up a **security system**. Follow these rules:
 | Flood detector | moisture `binary_sensor` |
 | Thermostat head ART-210 | `climate` (presets manual / schedule / eco / boost; attributes `schedules`, `schedule_name`, `reference_sensor`, `valve`…), valve opening sensor, numbers day / night / eco / manual temperature, offset, boost time |
 | Panel output O1, O2 … | `switch` (attribute `output_type`: `bi` or `mono` pulse) |
-| Panel wired zone Z1, Z2 … | `binary_sensor` without a class → **set the device class** (smoke, door, garage door, window…) in the entity settings |
+| Panel wired zone Z1, Z2 … | `binary_sensor` with the type chosen in the setup (smoke, door, garage door, window…) |
 | Keypad | keypad lockout `binary_sensor` |
 | Virtual IP device | `switch` |
 | Every device | tamper and trouble `binary_sensor` |

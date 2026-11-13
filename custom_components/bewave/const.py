@@ -6,6 +6,7 @@ CONF_HOST = "host"
 CONF_SERIAL = "serial"
 CONF_DEVICE_UUID = "device_uuid"
 CONF_MODE = "mode"
+CONF_ZONE_CLASSES = "zone_classes"        # wired zone id -> binary sensor device class
 CONF_DEV_SERVICES = "developer_services"   # raw protocol services (bewave.debug_*) - off by default
 
 DEFAULT_MODE = "defau"   # "default" protection mode key

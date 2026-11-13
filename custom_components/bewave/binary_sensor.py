@@ -5,10 +5,12 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity, BinarySensorDeviceClass)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er, issue_registry as ir
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import bewave_client as proto
+from . import zones as zn
 from .errors import describe
 from .const import DOMAIN
 
@@ -16,8 +18,6 @@ _CLASS = {"contact": BinarySensorDeviceClass.OPENING,
           "motion": BinarySensorDeviceClass.MOTION}
 # detectors whose telemetry type is generic but whose state (f9) is still meaningful
 _HW_CLASS = {proto.AFD_200: BinarySensorDeviceClass.MOISTURE}
-# HubDevice option present only on wired zone inputs of the main board
-_ZONE_OPT = 110
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
@@ -29,6 +29,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     @callback
     def _sync():
+        nonlocal zones_new
         new = []
         for d in hub.devices():
             if d["cat"] in _CLASS and d["id"] not in known:
@@ -37,10 +38,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             elif d.get("hwtype") in _HW_CLASS and d["id"] not in known:
                 known.add(d["id"])
                 new.append(BeWaveBinary(coordinator, hub, entry, d["id"], _HW_CLASS[d["hwtype"]]))
-            elif _ZONE_OPT in (d.get("options") or []) and d["id"] not in known:
-                # wired zone input of the hub main board (Z1, Z2, …); the class is set per entity in HA
+            elif zn.is_zone(d) and d["id"] not in known:
+                # wired zone input of the hub main board (Z1, Z2, …): class from the options (zones step)
                 known.add(d["id"])
-                new.append(BeWaveBinary(coordinator, hub, entry, d["id"], None))
+                new.append(BeWaveBinary(coordinator, hub, entry, d["id"], zn.device_class(entry.options, d["id"])))
+                zones_new = True
             if d.get("hwtype") in proto.KEYPAD_TYPES and ("keypad", d["id"]) not in known:
                 known.add(("keypad", d["id"]))
                 new.append(BeWaveKeypadBlock(coordinator, hub, entry, d["id"]))
@@ -51,7 +53,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                         BeWaveDeviceTrouble(coordinator, hub, entry, d["id"], tamper=False)]
         if new:
             async_add_entities(new)
+        if zones_new:
+            zones_new = False
+            hass.async_create_task(_zone_issue())
 
+    async def _zone_issue():
+        """Ask (Settings → Repairs) what is connected to wired zones that have no type yet - unless the user
+        already set a device class on the entity itself."""
+        reg = er.async_get(hass)
+        serial = entry.data.get("serial") or entry.entry_id
+        missing = []
+        for d in zn.zones(hub):
+            eid = reg.async_get_entity_id("binary_sensor", DOMAIN, f"bewave_{serial}_{d['id']}_state")
+            ent = reg.async_get(eid) if eid else None
+            if zn.device_class(entry.options, d["id"]) is None and str(d["id"]) not in (entry.options.get("zone_classes") or {}) \
+                    and not (ent and ent.device_class):
+                missing.append(zn.zone_label(d))
+        issue = f"zone_types_{entry.entry_id}"
+        if missing:
+            ir.async_create_issue(hass, DOMAIN, issue, is_fixable=True, severity=ir.IssueSeverity.WARNING,
+                                  translation_key="zone_types", translation_placeholders={"zones": ", ".join(missing)},
+                                  data={"entry_id": entry.entry_id})
+        else:
+            ir.async_delete_issue(hass, DOMAIN, issue)
+
+    zones_new = False
     _sync()
     entry.async_on_unload(coordinator.async_add_listener(_sync))
 

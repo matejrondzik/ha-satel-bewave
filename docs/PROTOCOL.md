@@ -7,7 +7,11 @@ which also works as a stand-alone CLI (`python3 bewave_client.py status --host â
 
 ## Transport
 
-- Discovery: UDP 4111. Session: **TCP 4200**.
+- Discovery: **UDP 4111**, plaintext (no keys). Broadcast a `TransportMessage` with only `SystemPing`
+  (`24 {1 {}}`, no header needed); every hub answers with `25 {1 Details}`: localIdentifier 1 (= the serial
+  used at sign-in), connectionParameters 2 (`"ip:4200"`), noUsers 3, name 4, timezoneSet 5, interfacesSet 6,
+  deviceDescription 7 (â€¦ 7 radio band 868, 9 firmware `"1.05"`). The ping changes nothing.
+- Session: **TCP 4200**.
 - Frame: `0x0a` + protobuf header + AES-256-GCM ciphertext of a protobuf `TransportMessage`.
 - Header fields: contentLength 2, userId 3, deviceId 4, counter 5, timestamp 6, random 7,
   protocolVersion 8, status 9, **error 10**.

@@ -37,6 +37,13 @@
         "data_description": {
           "host": "Nová lokálna IP adresa tej istej ústredne."
         }
+      },
+      "pick": {
+        "title": "Nájdené ústredne BE WAVE",
+        "description": "Tieto ústredne odpovedali v tvojej sieti. Vyber jednu alebo zadaj adresu ručne.",
+        "data": {
+          "hub": "Ústredňa"
+        }
       }
     },
     "error": {
@@ -53,7 +60,7 @@
   },
   "options": {
     "step": {
-      "init": {
+      "general": {
         "title": "Nastavenia BE WAVE",
         "description": "Vyber, ktorý režim stráženia entita alarmu zastráži a odstráži.",
         "data": {
@@ -64,6 +71,17 @@
           "mode": "Kľúč režimu v ústredni. `defau` je predvolený režim (celý objekt). Môžeš zadať kľúč iného režimu nastaveného v appke Be Wave.",
           "developer_services": "Zaregistruje `bewave.debug_patch` a `bewave.debug_send` (surové správy protokolu). Len na mapovanie nových zariadení – zlá správa môže ústredňu reštartovať alebo resetovať."
         }
+      },
+      "init": {
+        "title": "Nastavenia BE WAVE",
+        "menu_options": {
+          "general": "Všeobecné",
+          "zones": "Drôtové vstupy (Z1, Z2, …)"
+        }
+      },
+      "zones": {
+        "title": "Drôtové vstupy",
+        "description": "Ústredňa hlási len to, či je vstup narušený. Vyber, čo je ku každému vstupu pripojené – Home Assistant ho potom ukáže so správnou ikonou a stavmi (napr. *Zistené* / *Čisté* pre dym, *Otvorená* / *Zatvorená* pre bránu)."
       }
     }
   },
@@ -71,6 +89,30 @@
     "mode": {
       "options": {
         "defau": "Predvolený režim (defau)"
+      }
+    },
+    "zone_class": {
+      "options": {
+        "none": "Nič / obyčajný vstup",
+        "smoke": "Dymové čidlo",
+        "door": "Dvere",
+        "garage_door": "Garážová brána / brána",
+        "window": "Okno",
+        "opening": "Iné otvorenie",
+        "motion": "Pohyb",
+        "moisture": "Voda / zaplavenie",
+        "gas": "Plyn",
+        "heat": "Teplo",
+        "carbon_monoxide": "Oxid uhoľnatý",
+        "vibration": "Vibrácie",
+        "tamper": "Sabotáž",
+        "problem": "Porucha",
+        "safety": "Iná bezpečnosť"
+      }
+    },
+    "pick": {
+      "options": {
+        "manual": "Zadať IP adresu ručne"
       }
     }
   },
@@ -293,6 +335,22 @@
         "wait": {
           "name": "Čakať (s)",
           "description": "Ako dlho zbierať odpovede."
+        }
+      }
+    }
+  },
+  "issues": {
+    "zone_types": {
+      "title": "Vyber, čo je pripojené k drôtovým vstupom",
+      "fix_flow": {
+        "step": {
+          "zones": {
+            "title": "Drôtové vstupy",
+            "description": "Drôtové vstupy ústredne BE WAVE ešte nemajú typ: {zones}. Vyber, čo je k nim pripojené, aby mali správnu ikonu a stavy."
+          }
+        },
+        "abort": {
+          "not_loaded": "Integrácia BE WAVE nie je načítaná – skús znova, keď beží."
         }
       }
     }

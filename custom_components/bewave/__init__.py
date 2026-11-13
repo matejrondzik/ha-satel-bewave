@@ -8,9 +8,12 @@ import threading
 import time
 from datetime import timedelta
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY, ConfigEntry
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import config_validation as cv, device_registry as dr, discovery_flow
+from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.typing import ConfigType
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -21,6 +24,42 @@ from . import bewave_client as proto
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["alarm_control_panel", "switch", "binary_sensor", "sensor", "climate", "select", "light", "number"]
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+DISCOVERY_INTERVAL = timedelta(minutes=30)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Look for hubs on the LAN (UDP 4111) after start and every 30 min: new hubs show up under
+    *Discovered*, a configured hub that got a new IP address is updated (the flow aborts with the new host)."""
+
+    async def _scan(_now=None) -> None:
+        targets = ["255.255.255.255"]
+        try:
+            from homeassistant.components import network
+            targets += [str(a) for a in await network.async_get_ipv4_broadcast_addresses(hass)]
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            found = await hass.async_add_executor_job(proto.discover, tuple(dict.fromkeys(targets)), 2.0)
+        except OSError as err:
+            _LOGGER.debug("BE WAVE discovery failed: %s", err)
+            return
+        entries = {e.unique_id: e for e in hass.config_entries.async_entries(DOMAIN)}
+        for serial, info in found.items():
+            e = entries.get(f"bewave_{serial}")
+            if e is not None and e.data.get(CONF_HOST) == info["host"]:
+                continue                     # known hub at the same address - nothing to do
+            discovery_flow.async_create_flow(hass, DOMAIN, context={"source": SOURCE_INTEGRATION_DISCOVERY}, data=info)
+
+    async def _started(_event=None) -> None:
+        await _scan()
+        async_track_time_interval(hass, _scan, DISCOVERY_INTERVAL, cancel_on_shutdown=True)
+
+    if hass.is_running:
+        hass.async_create_task(_started())
+    else:
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _started)
+    return True
 
 
 class BeWaveHub:

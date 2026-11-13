@@ -1,7 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.8.0
 
+- **Finds hubs on the network** like the app (UDP 4111 broadcast): the setup lists hubs with name and
+  firmware, new hubs appear under *Discovered*, and a configured hub that changed its IP is updated.
+- **Wired zones**: the setup asks what is connected (Repairs after setup, Configure → Wired zones) and sets
+  the device class; options are now a menu (General / Wired zones).
+- Integration type `hub`.
 - Docs for AI assistants (`CLAUDE.md`, `AGENTS.md`, `docs/AI_SETUP.md`), `docs/FINDINGS.md` (hub behaviour),
   `docs/ADDING_DEVICES.md`, extended `docs/PROTOCOL.md`, issue templates.
 

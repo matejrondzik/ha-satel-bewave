@@ -85,4 +85,6 @@ devices. They explain most "why does it work like this" questions. Protocol deta
 - Troubles come as code lists: hub (SystemInfo status block field 12, memory 27) and devices (state field 1 of
   `HubDeviceState`). `errors.py` maps them to readable text.
 - No MQTT. The cloud connection, status LED and Grade 2 are toggles (`SystemTrigger` 11 / 5 / 12).
-- DHCP discovery works by the Satel MAC prefix `00:1B:9C`. Give the hub a fixed address.
+- **Discovery:** the hub answers an unencrypted ping on UDP 4111 (broadcast) with its serial, name, address
+  and firmware - this is how the app finds it, and how the integration finds hubs and follows IP changes.
+  Broadcasts do not cross VLANs; then enter the IP. DHCP discovery (Satel MAC prefix `00:1B:9C`) is a fallback.

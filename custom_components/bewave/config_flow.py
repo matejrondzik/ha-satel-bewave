@@ -2,11 +2,14 @@
 
 Steps
 -----
-* ``user``        – hub IP + login + password (prefilled IP when found via DHCP)
+* ``user``        – scans the LAN (UDP 4111); a found hub is picked in ``pick``, then
+                    hub IP + login + password
+* ``integration_discovery`` – a hub answered the background scan → confirm (also updates the IP of a
+                    configured hub)
 * ``dhcp``        – a Satel device (MAC 00:1B:9C) appeared on the network → confirm
 * ``reauth``      – the hub rejected the stored password → ask for a new one
 * ``reconfigure`` – the hub moved to another IP address
-* options         – protection mode used for arm / disarm
+* options         – protection mode, developer services, types of wired zones
 
 Home Assistant signs in like the Be Wave app and registers itself as a new mobile
 device of the given user. The device token is created once and reused on reauth /
@@ -34,9 +37,11 @@ from homeassistant.helpers.selector import (
 from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 
 from . import bewave_client as proto
+from . import zones as zn
 from .const import (
     CONF_APP_REGISTERED,
     CONF_DEV_SERVICES,
+    CONF_ZONE_CLASSES,
     CONF_DEVICE_UUID,
     CONF_HOST,
     CONF_LOGIN,
@@ -97,11 +102,16 @@ class BeWaveConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._host: str | None = None
+        self._scanned = False
+        self._found: dict[str, dict] = {}
 
     # ---- discovery ---------------------------------------------------------
     async def async_step_dhcp(self, discovery_info: DhcpServiceInfo) -> ConfigFlowResult:
-        """A Satel device (00:1B:9C…) got an address — offer to set it up."""
+        """A Satel device (00:1B:9C…) got an address — ask it who it is, then offer to set it up."""
         self._host = discovery_info.ip
+        found = await self.hass.async_add_executor_job(proto.discover, (self._host,), 1.5)
+        if found:
+            return await self.async_step_integration_discovery(next(iter(found.values())))
         self._async_abort_entries_match({CONF_HOST: self._host})
         mac = discovery_info.macaddress.replace(":", "").upper()
         await self.async_set_unique_id(f"bewave_mac_{mac}")
@@ -109,9 +119,54 @@ class BeWaveConfigFlow(ConfigFlow, domain=DOMAIN):
         self.context["title_placeholders"] = {"name": f"BE WAVE ({self._host})"}
         return await self.async_step_user()
 
+    async def async_step_integration_discovery(self, discovery_info: dict[str, Any]) -> ConfigFlowResult:
+        """A hub answered the UDP scan. A configured hub only gets its new IP address."""
+        self._host = discovery_info["host"]
+        await self.async_set_unique_id(f"bewave_{discovery_info['serial']}")
+        self._abort_if_unique_id_configured(updates={CONF_HOST: self._host})
+        self._async_abort_entries_match({CONF_HOST: self._host})
+        self.context["title_placeholders"] = {"name": discovery_info.get("name") or f"BE WAVE ({self._host})"}
+        return await self.async_step_user()
+
+    async def _scan(self) -> dict[str, dict]:
+        """Hubs on the LAN that are not set up yet."""
+        targets = ["255.255.255.255"]
+        try:
+            from homeassistant.components import network
+            targets += [str(a) for a in await network.async_get_ipv4_broadcast_addresses(self.hass)]
+        except Exception:  # noqa: BLE001 - network integration unavailable
+            pass
+        found = await self.hass.async_add_executor_job(proto.discover, tuple(dict.fromkeys(targets)), 2.0)
+        known = {e.unique_id for e in self._async_current_entries()}
+        return {s: i for s, i in found.items() if f"bewave_{s}" not in known}
+
+    async def async_step_pick(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Choose one of the hubs found on the network, or enter the address by hand."""
+        if user_input is not None:
+            choice = user_input["hub"]
+            if choice != "manual":
+                info = self._found[choice]
+                self._host = info["host"]
+                await self.async_set_unique_id(f"bewave_{choice}", raise_on_progress=False)
+                self._abort_if_unique_id_configured()
+                self.context["title_placeholders"] = {"name": info.get("name") or f"BE WAVE ({self._host})"}
+            return await self.async_step_user()
+        options = [{"value": s, "label": f"{i.get('name') or 'BE WAVE'} – {i['host']}"
+                                          + (f" (firmware {i['firmware']})" if i.get("firmware") else "")}
+                   for s, i in self._found.items()]
+        options.append({"value": "manual", "label": "manual"})
+        schema = vol.Schema({vol.Required("hub", default=options[0]["value"]): SelectSelector(SelectSelectorConfig(
+            options=options, mode=SelectSelectorMode.LIST, translation_key="pick"))})
+        return self.async_show_form(step_id="pick", data_schema=schema)
+
     # ---- new hub -----------------------------------------------------------
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
+        if user_input is None and self._host is None and not self._scanned:
+            self._scanned = True
+            self._found = await self._scan()
+            if self._found:
+                return await self.async_step_pick()
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
             self._async_abort_entries_match({CONF_HOST: host})
@@ -202,11 +257,28 @@ class BeWaveConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class BeWaveOptionsFlow(OptionsFlow):
-    """Which protection mode the alarm panel entity arms / disarms; developer services on / off."""
+    """General (protection mode, developer services) and types of wired zones."""
+
+    def _hub(self):
+        return self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id, {}).get("hub")
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        hub = self._hub()
+        if hub is not None and zn.zones(hub):
+            return self.async_show_menu(step_id="init", menu_options=["general", "zones"])
+        return await self.async_step_general()
+
+    async def async_step_zones(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        form, keys = zn.schema(self._hub(), zn.current_classes(self.hass, self.config_entry, self._hub()))
         if user_input is not None:
-            return self.async_create_entry(data={CONF_MODE: user_input[CONF_MODE].strip() or DEFAULT_MODE,
+            zn.clear_overrides(self.hass, self.config_entry, self._hub())
+            return self.async_create_entry(data=zn.merge(dict(self.config_entry.options), user_input, keys))
+        return self.async_show_form(step_id="zones", data_schema=form)
+
+    async def async_step_general(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            return self.async_create_entry(data={**self.config_entry.options,
+                                                 CONF_MODE: user_input[CONF_MODE].strip() or DEFAULT_MODE,
                                                  CONF_DEV_SERVICES: bool(user_input.get(CONF_DEV_SERVICES))})
         entry = self.config_entry
         current = entry.options.get(CONF_MODE, entry.data.get(CONF_MODE, DEFAULT_MODE))
@@ -216,4 +288,4 @@ class BeWaveOptionsFlow(OptionsFlow):
                 translation_key="mode")),
             vol.Optional(CONF_DEV_SERVICES, default=entry.options.get(CONF_DEV_SERVICES, False)): bool,
         })
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="general", data_schema=schema)
