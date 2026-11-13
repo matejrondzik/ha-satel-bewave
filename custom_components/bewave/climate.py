@@ -5,7 +5,14 @@ from homeassistant.components.climate import (
     ClimateEntity, ClimateEntityFeature, HVACAction, HVACMode)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
+import re
+import secrets
+
+import voluptuous as vol
+
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -61,6 +68,48 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     _sync()
     entry.async_on_unload(coordinator.async_add_listener(_sync))
 
+    # heating schedules (hub-wide list, edited through any head) + assigning one to a head
+    platform = entity_platform.async_get_current_platform()
+    platform.async_register_entity_service(
+        "save_schedule", {vol.Optional("schedule_id", default=""): str, vol.Required("name"): str,
+                          vol.Required("days"): dict}, "async_save_schedule")
+    platform.async_register_entity_service(
+        "delete_schedule", {vol.Required("schedule_id"): str}, "async_delete_schedule")
+    platform.async_register_entity_service(
+        "assign_schedule", {vol.Required("schedule_id"): str, vol.Optional("activate", default=True): bool},
+        "async_assign_schedule")
+
+
+_HHMM = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
+
+
+def _clean_days(days) -> dict:
+    """{"0": [["08:00", "20:00"], ...], ...} (0 = Monday) -> validated, sorted, non-overlapping windows."""
+    out = {}
+    for k, ranges in (days or {}).items():
+        day = int(k)
+        if not 0 <= day <= 6:
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="invalid_day", translation_placeholders={"day": str(k)})
+        clean = []
+        for r in ranges or []:
+            a, z = (str(x).strip() for x in r)
+            ma, mz = _HHMM.match(a), _HHMM.match(z)
+            if not ma or not mz:
+                raise HomeAssistantError(translation_domain=DOMAIN, translation_key="invalid_time", translation_placeholders={"range": f"{a}–{z}"})
+            ta, tz = int(ma[1]) * 60 + int(ma[2]), int(mz[1]) * 60 + int(mz[2])
+            if tz <= ta:
+                raise HomeAssistantError(translation_domain=DOMAIN, translation_key="end_before_start", translation_placeholders={"range": f"{a}–{z}"})
+            clean.append((ta, tz))
+        clean.sort()
+        for (a1, z1), (a2, _z2) in zip(clean, clean[1:]):
+            if a2 < z1:
+                raise HomeAssistantError(translation_domain=DOMAIN, translation_key="overlapping_windows")
+        if len(clean) > 8:
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="too_many_windows")
+        if clean:
+            out[str(day)] = [[f"{a // 60:02d}:{a % 60:02d}", f"{z // 60:02d}:{z % 60:02d}"] for a, z in clean]
+    return out
+
 
 class BeWaveThermostat(CoordinatorEntity, ClimateEntity):
     _attr_has_entity_name = True
@@ -100,14 +149,14 @@ class BeWaveThermostat(CoordinatorEntity, ClimateEntity):
 
     @property
     def current_temperature(self):
-        own = self._dev().get("temp")
-        if own is not None:
-            return own
-        ref = self._heater().get("sensor")       # head regulates by an external sensor
-        for d in self._hub.devices():
-            if ref and d["id"] == ref:
-                return d.get("temp")
-        return None
+        # a head with an external sensor regulates by that sensor -> show its temperature (the room temperature)
+        h = self._heater()
+        ref = h.get("sensor_source") or h.get("sensor")
+        if ref:
+            for d in self._hub.devices():
+                if d["id"] == ref and d.get("temp") is not None:
+                    return d.get("temp")
+        return self._dev().get("temp")
 
     @property
     def target_temperature(self):
@@ -131,13 +180,53 @@ class BeWaveThermostat(CoordinatorEntity, ClimateEntity):
                 "temperature_night": h.get("night"), "temperature_eco": h.get("eco"),
                 "temperature_manual": h.get("manual"), "child_lock": h.get("parental"),
                 "boost_time_s": (h.get("boost_time") or 0) // 1000 or None,
-                "battery": d.get("battery"), "room": d.get("room"), "device_id": self._devid}
+                "battery": d.get("battery"), "room": d.get("room"), "device_id": self._devid,
+                "temperature_offset": h.get("offset"), "reference_sensor": h.get("sensor_source") or h.get("sensor") or None, "schedule_id": h.get("schedule") or None,
+                "schedule_name": next((x["name"] for x in (self._hub.schedules or []) if x["id"] == h.get("schedule")), None),
+                "schedules": self._hub.schedules}
+
+    # ---- schedules -------------------------------------------------------------------------
+    def _need_schedules(self):
+        if self._hub.schedules is None:
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="schedules_not_loaded")
+        return [dict(x) for x in self._hub.schedules]
+
+    async def async_save_schedule(self, name: str, days: dict, schedule_id: str = ""):
+        cur = self._need_schedules()
+        name = name.strip()[:30] or "Schedule"
+        days = _clean_days(days)
+        if schedule_id:
+            if not any(x["id"] == schedule_id for x in cur):
+                raise HomeAssistantError(translation_domain=DOMAIN, translation_key="schedule_not_found")
+            cur = [({"id": x["id"], "name": name, "days": days} if x["id"] == schedule_id else x) for x in cur]
+        else:
+            ids = {x["id"] for x in cur}
+            schedule_id = next(i for i in (secrets.token_hex(3)[:5] for _ in range(50)) if i not in ids)
+            cur.append({"id": schedule_id, "name": name, "days": days})
+        if not await self.hass.async_add_executor_job(self._hub.write_schedules, cur):
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="hub_rejected")
+        self.coordinator.async_update_listeners()
+
+    async def async_delete_schedule(self, schedule_id: str):
+        cur = self._need_schedules()
+        users = [d.get("name") or d["id"] for d in self._hub.devices() if (d.get("heater") or {}).get("schedule") == schedule_id]
+        if users:
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="schedule_in_use", translation_placeholders={"heads": ", ".join(map(str, users))})
+        if not await self.hass.async_add_executor_job(self._hub.write_schedules, [x for x in cur if x["id"] != schedule_id]):
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="hub_rejected")
+        self.coordinator.async_update_listeners()
+
+    async def async_assign_schedule(self, schedule_id: str, activate: bool = True):
+        if schedule_id and not any(x["id"] == schedule_id for x in self._need_schedules()):
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="schedule_not_found")
+        await self.hass.async_add_executor_job(self._hub.assign_schedule, self._devid, schedule_id, activate)
+        self.async_write_ha_state()
 
     async def async_set_temperature(self, **kwargs):
         temp = kwargs.get(ATTR_TEMPERATURE)
         if temp is None:
             return
-        temp = round(float(temp) * 2) / 2
+        temp = round(float(temp) * 10) / 10       # heads take 0.1 °C (UI steps stay 0.5)
         await self.hass.async_add_executor_job(
             lambda: self._hub.set_patch(
                 self._devid, proto.SET_HEATER_FORCED_VALUE, flt=temp,

@@ -16,7 +16,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import (DOMAIN, CONF_LOGIN, CONF_PASSWORD, CONF_HOST, CONF_SERIAL,
                     CONF_DEVICE_UUID, CONF_MODE, DEFAULT_MODE, SCAN_INTERVAL_SECONDS,
-                    CONF_APP_REGISTERED)
+                    CONF_APP_REGISTERED, CONF_DEV_SERVICES)
 from . import bewave_client as proto
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,6 +38,7 @@ class BeWaveHub:
         self._empty = 0                        # consecutive polls with no data
         self.state: str | None = None          # armed_away | disarmed | None
         self.flags = {"led": None, "grade2": None, "satel": None}
+        self.schedules = None            # heating schedules from the hub (None = not received yet)
         self.info = {"power": None, "stor_free": None, "stor_total": None,
                      "network": None, "firmware": None, "errors": None, "errors_memory": None}
         self.dev_names: dict[int, dict] = {}   # config: name/room/model/sysnum/bypass
@@ -183,6 +184,18 @@ class BeWaveHub:
         for _fd, pt in msgs:
             if not pt:
                 continue
+            try:  # keep the last raw config / schedule list for debugging (bewave.debug_send dump)
+                top = proto.pb_read(pt)
+                for k in (45, 47, 51):
+                    if k in top:
+                        self.last_raw = getattr(self, "last_raw", {})
+                        self.last_raw[k] = top[k][-1].hex()
+                        if k == 47:  # schedule list can come in several messages - keep them all
+                            hist = self.last_raw.setdefault("47_all", [])
+                            hist.extend(f"{time.strftime('%H:%M:%S')} {v.hex()}" for v in top[k])
+                            del hist[:-10]
+            except Exception:  # noqa: BLE001
+                pass
             st = proto.armed_state(pt)
             if st is not None:
                 self.state = "armed_away" if st else "disarmed"
@@ -199,9 +212,12 @@ class BeWaveHub:
             net = proto.network_active(pt)
             if net is not None:
                 self.info["network"] = net
+            sch = proto.parse_schedules(pt)
+            if sch is not None:
+                self.schedules = sch
             cfg = proto.parse_config_devices(pt)
             for did, d in cfg.items():
-                self.dev_names[did] = {k: d[k] for k in ("name", "room", "type", "model", "sysnum", "bypass", "hwtype")}
+                self.dev_names[did] = {k: d[k] for k in ("name", "room", "type", "model", "sysnum", "bypass", "hwtype", "output_type")}
                 ds = self.dev_state.setdefault(did, {})
                 for k in ("signal", "battery", "state", "temp", "type", "volt", "on_off", "heater", "errors",
                           "keypad_block", "options", "raw"):
@@ -229,7 +245,7 @@ class BeWaveHub:
                         "cat": proto.DEV_TYPES.get(typ, "device"),
                         "state": st.get("state"), "temp": st.get("temp"),
                         "battery": st.get("battery"), "signal": st.get("signal"),
-                        "volt": st.get("volt"), "hwtype": nm.get("hwtype"),
+                        "volt": st.get("volt"), "hwtype": nm.get("hwtype"), "output_type": nm.get("output_type"),
                         "on_off": st.get("on_off"), "heater": st.get("heater"),
                         "errors": st.get("errors"), "keypad_block": st.get("keypad_block"),
                         "options": st.get("options"), "raw": st.get("raw")})
@@ -240,10 +256,15 @@ class BeWaveHub:
         connection if the socket was stale (commands are lost on a dead socket).
         Caller holds the lock."""
         last = None
+        # the hub drops a command that arrives right after the previous one -> keep a minimal gap
+        gap = 1.5 - (time.monotonic() - getattr(self, "_last_cmd", 0))
+        if gap > 0:
+            time.sleep(gap)
         for attempt in (1, 2):
             try:
                 self._ensure()
                 send()
+                self._last_cmd = time.monotonic()
                 # A live session answers with telemetry; no reply == dropped
                 # socket (half-open), so require real data before trusting it.
                 msgs = self.conn.read_messages(2)
@@ -279,6 +300,26 @@ class BeWaveHub:
         with self._lock:
             return self._command(lambda: self.conn.send_patch(devid, command, **values),
                                  verify=verify)
+
+    def write_schedules(self, schedules):
+        """Replace the hub's schedule list (StructureUpdateSchedule). One request = one message (the hub drops the
+        connection on multi-patch requests, so nothing else is bundled)."""
+        with self._lock:
+            ok = self._command(lambda: self.conn.send_command(proto.schedules_plaintext(schedules)))
+            if ok:
+                self.schedules = [dict(x) for x in schedules]
+            return ok
+
+    def assign_schedule(self, devid, schedule_id, activate):
+        """Give a head a schedule ("" = none) and optionally switch it to schedule mode. Patches go one by one with a
+        pause: assigning a schedule puts the head back to manual mode."""
+        h = lambda: next((d.get("heater") or {} for d in self.devices() if d["id"] == devid), {})
+        if h().get("schedule") != schedule_id:
+            self.set_patch(devid, proto.SET_SCHEDULE, string=schedule_id, verify=lambda: h().get("schedule") == schedule_id)
+            time.sleep(3)
+        mode = 1 if (activate and schedule_id) else 0
+        if h().get("mode") != mode or (mode == 0 and not schedule_id):
+            self.set_patch(devid, proto.SET_HEATER_WORKING_MODE, number=mode, verify=lambda: h().get("mode") == mode)
 
     def set_toggle(self, name, desired):
         if name not in proto.SETTING_IDS:
@@ -359,20 +400,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         sw_version=hub.info.get("firmware"),
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    _register_debug_service(hass)
+    if entry.options.get(CONF_DEV_SERVICES):
+        _register_debug_service(hass)
     return True
 
 
 def _register_debug_service(hass: HomeAssistant) -> None:
-    """Temporary RE helper: send one raw DeviceStateUpdate patch through the
-    integration's own session and return the device's raw state before/after."""
+    """Developer services (enabled in the integration options), for mapping new devices / fields.
+    debug_patch: send one raw DeviceStateUpdate patch and return the device's raw state before/after.
+    debug_send: send a raw plaintext message (hex) and return the hub's reply fields.
+    WARNING: they bypass every safety check - a wrong message can e.g. restart or reset the hub."""
     if hass.services.has_service(DOMAIN, "debug_patch"):
         return
 
     async def _handle(call: ServiceCall):
         hub: BeWaveHub = next(iter(hass.data[DOMAIN].values()))["hub"]
         devid, cmd = int(call.data["device"]), int(call.data["command"])
-        kw = {k: call.data[k] for k in ("boolean", "number", "flt") if k in call.data}
+        kw = {k: call.data[k] for k in ("boolean", "number", "flt", "string") if k in call.data}
         st = lambda: dict(hub.dev_state.get(devid, {}))
         before = st()
         ok = await hass.async_add_executor_job(lambda: hub.set_patch(devid, cmd, **kw))
@@ -384,6 +428,40 @@ def _register_debug_service(hass: HomeAssistant) -> None:
 
     hass.services.async_register(DOMAIN, "debug_patch", _handle,
                                  supports_response=SupportsResponse.OPTIONAL)
+
+    async def _send(call: ServiceCall):
+        """RE helper: send raw plaintext (hex) on the integration's session, return the reply fields (hex)."""
+        hub: BeWaveHub = next(iter(hass.data[DOMAIN].values()))["hub"]
+        pt = bytes.fromhex(call.data["hex"])
+        want = {int(x) for x in call.data.get("fields", [])}
+        if not pt:  # dump the last raw config/schedules to a file instead of sending anything
+            raw = dict(getattr(hub, "last_raw", {}))
+            def _w():
+                import json as _j
+                with open(hass.config.path("bewave_last_raw.json"), "w") as f:
+                    _j.dump(raw, f)
+            await hass.async_add_executor_job(_w)
+            return {"saved": {k: (len(v) // 2 if isinstance(v, str) else len(v)) for k, v in raw.items()}}
+
+        def _run():
+            with hub._lock:
+                hub._ensure()
+                hub.conn.send_command(pt)
+                msgs = hub.conn.read_messages(float(call.data.get("wait", 3)))
+                hub._update_from(msgs)
+                return msgs
+        msgs = await hass.async_add_executor_job(_run)
+        out = []
+        for fd, body in msgs:
+            if not body:
+                continue
+            d = proto.pb_read(body)
+            for k, vs in d.items():
+                if not want or k in want:
+                    out += [{"field": k, "err": fd.get(10), "hex": v.hex() if isinstance(v, bytes) else v} for v in vs]
+        return {"messages": out}
+
+    hass.services.async_register(DOMAIN, "debug_send", _send, supports_response=SupportsResponse.OPTIONAL)
 
 
 async def _async_reload(hass: HomeAssistant, entry: ConfigEntry) -> None:

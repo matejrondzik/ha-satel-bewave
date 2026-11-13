@@ -36,6 +36,7 @@ from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 from . import bewave_client as proto
 from .const import (
     CONF_APP_REGISTERED,
+    CONF_DEV_SERVICES,
     CONF_DEVICE_UUID,
     CONF_HOST,
     CONF_LOGIN,
@@ -201,16 +202,18 @@ class BeWaveConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class BeWaveOptionsFlow(OptionsFlow):
-    """Which protection mode the alarm panel entity arms / disarms."""
+    """Which protection mode the alarm panel entity arms / disarms; developer services on / off."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
-            return self.async_create_entry(data={CONF_MODE: user_input[CONF_MODE].strip() or DEFAULT_MODE})
+            return self.async_create_entry(data={CONF_MODE: user_input[CONF_MODE].strip() or DEFAULT_MODE,
+                                                 CONF_DEV_SERVICES: bool(user_input.get(CONF_DEV_SERVICES))})
         entry = self.config_entry
         current = entry.options.get(CONF_MODE, entry.data.get(CONF_MODE, DEFAULT_MODE))
         schema = vol.Schema({
             vol.Required(CONF_MODE, default=current): SelectSelector(SelectSelectorConfig(
                 options=[DEFAULT_MODE], custom_value=True, mode=SelectSelectorMode.DROPDOWN,
                 translation_key="mode")),
+            vol.Optional(CONF_DEV_SERVICES, default=entry.options.get(CONF_DEV_SERVICES, False)): bool,
         })
         return self.async_show_form(step_id="init", data_schema=schema)

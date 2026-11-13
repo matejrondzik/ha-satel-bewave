@@ -44,6 +44,7 @@ DEV_TYPES = {0x10002: "keyfob", 0x10003: "motion", 0x10007: "contact",
              0x1004F: "motion", 0x10051: "motion"}
 # HubDeviceType values (config f2) and HubDeviceState_Settings_Command values
 VIRTUAL_IP_DEVICE = 69
+AFD_200 = 18                     # flood detector (state f9: 1 = water)
 ART_210 = 35                     # thermostatic radiator head
 SET_ON_OFF = 1
 SET_ALARM_OPTICAL_DURATION = 21  # number, seconds (app allows 0..180)
@@ -52,6 +53,13 @@ LUNA_TYPES = {58, 59, 61, 62, 79, 80}   # SLIM-*-LUNA-* detectors with a light r
 SET_HEATER_WORKING_MODE = 60     # number: 0 manual, 1 schedule, 2 eco
 SET_HEATER_FORCED_VALUE = 61     # Float: active target temperature
 SET_HEATER_BOOST = 107           # boolean
+# heater preset temperatures / settings (Float f13 unless noted) - as the Be Wave app sends them
+SET_HEATER_TEMP_DAY = 62
+SET_HEATER_TEMP_NIGHT = 63
+SET_HEATER_TEMP_ECO = 64
+SET_HEATER_BOOST_TIME = 65       # number, milliseconds
+SET_HEATER_OFFSET = 66
+SET_HEATER_TEMP_MANUAL = 104     # stored in state field 95
 HEATER_MODES = {0: "manual", 1: "schedule", 2: "eco"}
 # HYBRID drops a session after ~2.7 s without traffic; refresh well below that.
 KEEPALIVE_S = 1.0
@@ -258,7 +266,8 @@ def _telem_from_block(f3block, f2list, errs=None):
             "keypad_block": (f3.get(112, [0])[0] == 1) if f3 else None,
             # f1 = packed list of supported HubDeviceState_Settings_Command values
             "options": packed_ints(f3.get(1)) if f3 and 1 in f3 else None,
-            "raw": {k: v[0] for k, v in f3.items() if k != 1 and isinstance(v[0], int)} if f3 else None,
+            "raw": ({k: v[0] for k, v in f3.items() if k != 1 and isinstance(v[0], int)}
+                    | {k: _s(v[0]) for k, v in f3.items() if k in (50, 118) and isinstance(v[0], bytes)}) if f3 else None,
             "errors": packed_ints(errs) if errs is not None else None}
 
 
@@ -271,7 +280,98 @@ def _heater(f3):
     return {"mode": f3.get(60, [0])[0], "target": flt(61), "day": flt(62), "night": flt(63),
             "eco": flt(64), "manual": flt(95), "boost": f3.get(97, [0])[0] == 1,
             "boost_time": f3.get(65, [None])[0], "parental": f3.get(68, [0])[0] == 1,
-            "valve": f3.get(109, [None])[0], "sensor": f3.get(67, [None])[0]}
+            "valve": f3.get(109, [None])[0], "sensor": f3.get(67, [None])[0],
+            "offset": flt(66) if 66 in f3 else 0.0,
+            "schedule": _s(f3[50][0]) if 50 in f3 and isinstance(f3[50][0], bytes) else "",
+            # heaterSensorSource f118 {f1 = device id}: also 64-bit ids (LUNA bus detectors) that f67 cannot hold
+            "sensor_source": _src(f3)}
+
+
+def _src(f3):
+    try:
+        v = f3.get(118, [b""])[0]
+        return pb_read(v).get(1, [None])[0] if isinstance(v, bytes) and v else None
+    except Exception:  # noqa: BLE001
+        return None
+
+# --- heating schedules (StructureGetSchedule f46/f47, StructureUpdateSchedule f50/f51) ---------------
+# HubSchedule {id f1 str, name f2 str, entries f3[{day f1 (0 = Monday .. 6 = Sunday), ranges f2[{start f1, end f2}]}]},
+# time = {hour f1, minute f2}. A schedule holds only time windows: a head in schedule mode heats to its "day"
+# temperature inside a window and to its "night" temperature outside.
+SCHEDULE_GET = 46
+SCHEDULE_UPDATE = 50
+SET_SCHEDULE = 50                # device patch: string = schedule id ("" = none)
+
+
+def parse_schedules(plaintext):
+    """f47 -> list of {id, name, days: {"0": [["08:00", "20:00"], ...], ...}}; None if no list in the message."""
+    d = pb_read(plaintext)
+    if 47 not in d:
+        return None
+    body = d[47][-1]
+    if not body:
+        return None                 # bare change notification without the list
+    pl = pb_read(body).get(1)
+    if not pl:
+        return []
+    out = []
+    for raw in pb_read(pl[0]).get(1, []):
+        sd = pb_read(raw)
+        days = {}
+        for e in sd.get(3, []):
+            ed = pb_read(e)
+            day = ed.get(1, [0])[0]
+            rs = []
+            for r in ed.get(2, []):
+                rd = pb_read(r)
+                def tm(k):
+                    t = pb_read(rd[k][0]) if k in rd else {}
+                    return f"{t.get(1, [0])[0]:02d}:{t.get(2, [0])[0]:02d}"
+                rs.append([tm(1), tm(2)])
+            days.setdefault(str(day), []).extend(rs)
+        out.append({"id": _s(sd.get(1, [b""])[0]), "name": _s(sd.get(2, [b""])[0]), "days": days})
+    return out
+
+
+def schedules_plaintext(schedules):
+    """Full schedule list -> StructureUpdateSchedule request (the hub replaces its whole list)."""
+    def tm(hhmm):
+        h, m = (int(x) for x in str(hhmm).split(":"))
+        return (pb_varint(1, h) if h else b"") + (pb_varint(2, m) if m else b"")
+    items = b""
+    for sc in schedules:
+        b = pb_bytes(1, sc["id"].encode()) + pb_bytes(2, sc.get("name", "").encode())
+        for day in range(7):
+            ranges = (sc.get("days") or {}).get(str(day)) or []
+            if not ranges:
+                continue
+            e = pb_varint(1, day) if day else b""
+            for a, z in ranges:
+                e += pb_bytes(2, pb_bytes(1, tm(a)) + pb_bytes(2, tm(z)))
+            b += pb_bytes(3, e)
+        items += pb_bytes(1, b)
+    return pb_bytes(SCHEDULE_UPDATE, pb_bytes(1, items))
+
+
+# Hub main-board outputs share device uuid 1 and differ by HubDeviceKey field 2 (O1 = 5, O2 = 6, ...).
+# They get a composite id uuid*1000+index (1005, 1006); real devices (uuid >= 1000) keep their uuid.
+COMPOSITE = {}   # composite id -> (uuid, index)
+
+def key_to_id(key_bytes):
+    k = pb_read(key_bytes)
+    uuid, sub = k.get(1, [None])[0], k.get(2, [None])[0]
+    if uuid is None or sub is None or uuid >= 1000:
+        return uuid
+    cid = uuid * 1000 + sub
+    COMPOSITE[cid] = (uuid, sub)
+    return cid
+
+def key_bytes(devid):
+    """HubDeviceKey for a (possibly composite) device id."""
+    if devid in COMPOSITE:
+        uuid, sub = COMPOSITE[devid]
+        return pb_varint(1, uuid) + pb_varint(2, sub)
+    return pb_varint(1, devid)
 
 def parse_telemetry(plaintext):
     """f89 -> {devid: telemetry}."""
@@ -283,7 +383,7 @@ def parse_telemetry(plaintext):
     for dev in f1.get(2, []):
         dd = pb_read(dev)
         if 1 not in dd: continue
-        devid = pb_read(dd[1][0]).get(1, [None])[0]
+        devid = key_to_id(dd[1][0])
         if devid is None: continue
         body = pb_read(dd[2][0]) if 2 in dd else {}
         out[devid] = _telem_from_block(body[3][0] if 3 in body else None, body.get(2, []),
@@ -302,7 +402,7 @@ def parse_config_devices(plaintext):
         for dev in rd.get(5, []):
             dd = pb_read(dev)
             if 1 not in dd: continue
-            devid = pb_read(dd[1][0]).get(1, [None])[0]
+            devid = key_to_id(dd[1][0])
             if devid is None: continue
             tel = {"type": None}
             if 20 in dd:
@@ -312,6 +412,9 @@ def parse_config_devices(plaintext):
                           "type": tel.get("type"),
                           "model": DEV_MODELS.get(dd.get(2, [None])[0]),
                           "hwtype": dd.get(2, [None])[0],
+                          # output reaction type (HubDevice f30): SWITCH_BI / SWITCH_MONO (pulse timed by the hub) / …
+                          "output_type": {0: "bi", 1: "mono", 2: "thermostat_heating", 3: "thermostat_cooling",
+                                          4: "alarm"}.get(dd.get(30, [None])[0]),
                           "on_off": tel.get("on_off"),
                           "heater": tel.get("heater"),
                           "sysnum": dd.get(21, [None])[0],
@@ -412,16 +515,18 @@ class BeWaveClient:
         return pb_bytes(94, pb_bytes(1, pb_bytes(1, inner)))
     def set_on_off_plaintext(self, devid, on):
         """DeviceStateUpdate (f66) -> payload.patches[{deviceId{uuid}, type=SET_ON_OFF, boolean}]."""
-        patch = (pb_bytes(1, pb_varint(1, devid)) + pb_varint(2, SET_ON_OFF)
+        patch = (pb_bytes(1, key_bytes(devid)) + pb_varint(2, SET_ON_OFF)
                  + pb_varint(10, 1 if on else 0))
         return pb_bytes(66, pb_bytes(1, pb_bytes(1, patch)))
-    def patch_plaintext(self, devid, command, boolean=None, number=None, flt=None):
+    def patch_plaintext(self, devid, command, boolean=None, number=None, flt=None, string=None):
         """Generic DeviceStateUpdate patch for one device."""
-        patch = pb_bytes(1, pb_varint(1, devid)) + pb_varint(2, command)
+        patch = pb_bytes(1, key_bytes(devid)) + pb_varint(2, command)
         if boolean is not None:
             patch += pb_varint(10, 1 if boolean else 0)
         if number is not None:
             patch += pb_varint(11, int(number))
+        if string is not None:
+            patch += pb_bytes(12, str(string).encode())
         if flt is not None:
             patch += pb_fixed32(13, struct.unpack('<I', struct.pack('<f', float(flt)))[0])
         return pb_bytes(66, pb_bytes(1, pb_bytes(1, patch)))

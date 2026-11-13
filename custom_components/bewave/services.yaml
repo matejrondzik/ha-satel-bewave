@@ -1,0 +1,103 @@
+save_schedule:
+  target:
+    entity:
+      integration: bewave
+      domain: climate
+  fields:
+    schedule_id:
+      example: e5787
+      selector:
+        text:
+    name:
+      required: true
+      example: Weekdays
+      selector:
+        text:
+    days:
+      required: true
+      example: '{"0": [["06:00", "08:00"], ["16:00", "22:00"]], "5": [["08:00", "22:00"]]}'
+      selector:
+        object:
+
+delete_schedule:
+  target:
+    entity:
+      integration: bewave
+      domain: climate
+  fields:
+    schedule_id:
+      required: true
+      selector:
+        text:
+
+assign_schedule:
+  target:
+    entity:
+      integration: bewave
+      domain: climate
+  fields:
+    schedule_id:
+      required: true
+      selector:
+        text:
+    activate:
+      default: true
+      selector:
+        boolean:
+
+# developer services - registered only when enabled in the integration options
+debug_patch:
+  fields:
+    device:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 99999999999999
+          mode: box
+    command:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 255
+          mode: box
+    boolean:
+      selector:
+        boolean:
+    number:
+      selector:
+        number:
+          mode: box
+    flt:
+      selector:
+        number:
+          mode: box
+          step: any
+    string:
+      selector:
+        text:
+    wait:
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 30
+          unit_of_measurement: s
+
+debug_send:
+  fields:
+    hex:
+      required: true
+      selector:
+        text:
+    fields:
+      selector:
+        object:
+    wait:
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 30
+          unit_of_measurement: s

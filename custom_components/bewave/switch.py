@@ -31,7 +31,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     def _sync():
         new = []
         for d in hub.devices():
-            if d.get("hwtype") == proto.VIRTUAL_IP_DEVICE and d["id"] not in known:
+            # virtual IP devices + any other output the hub lets us switch (options contain SET_ON_OFF),
+            # e.g. a hub main-board output O1 set up as a bistable switch; LUNA detectors are lights instead
+            # hwtype comes with the config (telemetry can arrive first) - decide only once the type is known,
+            # otherwise LUNA detectors (their light ring has its own light entity) would get a switch too
+            switchable = (d.get("hwtype") is not None and proto.SET_ON_OFF in (d.get("options") or [])
+                          and d.get("hwtype") not in proto.LUNA_TYPES)
+            if (d.get("hwtype") == proto.VIRTUAL_IP_DEVICE or switchable) and d["id"] not in known:
                 known.add(d["id"])
                 new.append(BeWaveDeviceSwitch(coordinator, hub, entry, d["id"]))
         if new:
@@ -42,7 +48,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class BeWaveDeviceSwitch(CoordinatorEntity, SwitchEntity):
-    """On/off output of a BE WAVE device (virtual IP devices)."""
+    """On/off output of a BE WAVE device (virtual IP devices, hub outputs)."""
 
     _attr_has_entity_name = True
     _attr_name = None
@@ -56,7 +62,7 @@ class BeWaveDeviceSwitch(CoordinatorEntity, SwitchEntity):
         d = self._dev()
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{serial}_{devid}")},
-            manufacturer="Satel", model="Virtual IP device",
+            manufacturer="Satel", model=d.get("model") or "Virtual IP device",
             name=d.get("name") or f"BE WAVE {devid}",
         )
 
@@ -74,7 +80,7 @@ class BeWaveDeviceSwitch(CoordinatorEntity, SwitchEntity):
     def extra_state_attributes(self):
         d = self._dev()
         return {"room": d.get("room"), "device_id": self._devid,
-                "input_violated": d.get("state") == 1}
+                "input_violated": d.get("state") == 1, "output_type": d.get("output_type")}
 
     async def _set(self, on: bool):
         await self.hass.async_add_executor_job(self._hub.set_on_off, self._devid, on)

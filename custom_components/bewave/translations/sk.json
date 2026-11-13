@@ -57,10 +57,12 @@
         "title": "Nastavenia BE WAVE",
         "description": "Vyber, ktorý režim stráženia entita alarmu zastráži a odstráži.",
         "data": {
-          "mode": "Režim stráženia"
+          "mode": "Režim stráženia",
+          "developer_services": "Vývojárske služby"
         },
         "data_description": {
-          "mode": "Kľúč režimu v ústredni. `defau` je predvolený režim (celý objekt). Môžeš zadať kľúč iného režimu nastaveného v appke Be Wave."
+          "mode": "Kľúč režimu v ústredni. `defau` je predvolený režim (celý objekt). Môžeš zadať kľúč iného režimu nastaveného v appke Be Wave.",
+          "developer_services": "Zaregistruje `bewave.debug_patch` a `bewave.debug_send` (surové správy protokolu). Len na mapovanie nových zariadení – zlá správa môže ústredňu reštartovať alebo resetovať."
         }
       }
     }
@@ -153,6 +155,145 @@
     "number": {
       "optical_duration": {
         "name": "Čas svietenia"
+      },
+      "temperature_day": {
+        "name": "Teplota deň"
+      },
+      "temperature_night": {
+        "name": "Teplota noc"
+      },
+      "temperature_eco": {
+        "name": "Teplota eco"
+      },
+      "temperature_manual": {
+        "name": "Teplota manuál"
+      },
+      "temperature_offset": {
+        "name": "Korekcia teploty"
+      },
+      "boost_time": {
+        "name": "Dĺžka boostu"
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_day": {
+      "message": "Neplatný deň {day} (0 = pondelok … 6 = nedeľa)."
+    },
+    "invalid_time": {
+      "message": "Neplatný čas {range} (formát HH:MM)."
+    },
+    "end_before_start": {
+      "message": "Koniec musí byť po začiatku ({range})."
+    },
+    "overlapping_windows": {
+      "message": "Časové okná sa prekrývajú."
+    },
+    "too_many_windows": {
+      "message": "Najviac 8 okien za deň."
+    },
+    "schedules_not_loaded": {
+      "message": "Zoznam plánov z ústredne ešte neprišiel – skús o chvíľu."
+    },
+    "hub_rejected": {
+      "message": "Ústredňa zmenu neprijala."
+    },
+    "schedule_in_use": {
+      "message": "Plán používa: {heads} – najprv im daj iný plán."
+    },
+    "schedule_not_found": {
+      "message": "Taký plán v ústredni nie je."
+    }
+  },
+  "services": {
+    "save_schedule": {
+      "name": "Uložiť plán kúrenia",
+      "description": "Vytvorí alebo upraví plán v ústredni (časové okná po dňoch; v okne hlavica v režime Plán kúri na dennú teplotu, mimo neho na nočnú). Plány sú spoločné pre všetky hlavice.",
+      "fields": {
+        "schedule_id": {
+          "name": "ID plánu",
+          "description": "Prázdne = nový plán."
+        },
+        "name": {
+          "name": "Názov",
+          "description": "Najviac 30 znakov."
+        },
+        "days": {
+          "name": "Dni",
+          "description": "{\"0\": [[\"08:00\", \"20:00\"]], …} – 0 = pondelok … 6 = nedeľa, najviac 8 okien za deň."
+        }
+      }
+    },
+    "delete_schedule": {
+      "name": "Zmazať plán kúrenia",
+      "description": "Zmaže plán, ktorý nepoužíva žiadna hlavica.",
+      "fields": {
+        "schedule_id": {
+          "name": "ID plánu",
+          "description": "ID z atribútu `schedules` termostatu."
+        }
+      }
+    },
+    "assign_schedule": {
+      "name": "Priradiť plán hlavici",
+      "description": "Dá hlavici plán (prázdne = žiadny) a voliteľne ju prepne do režimu Plán.",
+      "fields": {
+        "schedule_id": {
+          "name": "ID plánu",
+          "description": "ID z atribútu `schedules`; prázdne = bez plánu."
+        },
+        "activate": {
+          "name": "Zapnúť režim Plán",
+          "description": "Prepnúť hlavicu aj do režimu Plán."
+        }
+      }
+    },
+    "debug_patch": {
+      "name": "Poslať surový patch (vývoj)",
+      "description": "Pošle jeden DeviceStateUpdate patch a vráti surový stav zariadenia pred a po. Zapína sa v nastaveniach integrácie.",
+      "fields": {
+        "device": {
+          "name": "ID zariadenia",
+          "description": "ID zariadenia (atribút `serial` / `device_id`)."
+        },
+        "command": {
+          "name": "Príkaz",
+          "description": "Číslo príkazu patchu."
+        },
+        "boolean": {
+          "name": "Hodnota boolean"
+        },
+        "number": {
+          "name": "Hodnota číslo"
+        },
+        "flt": {
+          "name": "Hodnota float"
+        },
+        "string": {
+          "name": "Hodnota text"
+        },
+        "wait": {
+          "name": "Čakať (s)",
+          "description": "Ako dlho čakať na nový stav."
+        }
+      }
+    },
+    "debug_send": {
+      "name": "Poslať surovú správu (vývoj)",
+      "description": "Pošle surovú správu (hex) v relácii integrácie a vráti polia odpovede. Prázdny hex = uloží poslednú surovú konfiguráciu do bewave_last_raw.json. Zapína sa v nastaveniach integrácie.",
+      "fields": {
+        "hex": {
+          "name": "Správa (hex)",
+          "description": "Plaintext protobuf v hex."
+        },
+        "fields": {
+          "name": "Polia odpovede",
+          "description": "Vrátiť len tieto polia."
+        },
+        "wait": {
+          "name": "Čakať (s)",
+          "description": "Ako dlho zbierať odpovede."
+        }
       }
     }
   }

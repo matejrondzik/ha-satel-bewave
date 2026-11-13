@@ -14,6 +14,10 @@ from .const import DOMAIN
 
 _CLASS = {"contact": BinarySensorDeviceClass.OPENING,
           "motion": BinarySensorDeviceClass.MOTION}
+# detectors whose telemetry type is generic but whose state (f9) is still meaningful
+_HW_CLASS = {proto.AFD_200: BinarySensorDeviceClass.MOISTURE}
+# HubDevice option present only on wired zone inputs of the main board
+_ZONE_OPT = 110
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
@@ -30,6 +34,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             if d["cat"] in _CLASS and d["id"] not in known:
                 known.add(d["id"])
                 new.append(BeWaveBinary(coordinator, hub, entry, d["id"], _CLASS[d["cat"]]))
+            elif d.get("hwtype") in _HW_CLASS and d["id"] not in known:
+                known.add(d["id"])
+                new.append(BeWaveBinary(coordinator, hub, entry, d["id"], _HW_CLASS[d["hwtype"]]))
+            elif _ZONE_OPT in (d.get("options") or []) and d["id"] not in known:
+                # wired zone input of the hub main board (Z1, Z2, …); the class is set per entity in HA
+                known.add(d["id"])
+                new.append(BeWaveBinary(coordinator, hub, entry, d["id"], None))
             if d.get("hwtype") in proto.KEYPAD_TYPES and ("keypad", d["id"]) not in known:
                 known.add(("keypad", d["id"]))
                 new.append(BeWaveKeypadBlock(coordinator, hub, entry, d["id"]))

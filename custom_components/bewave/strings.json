@@ -57,10 +57,12 @@
         "title": "BE WAVE options",
         "description": "Choose which protection mode the alarm panel entity arms and disarms.",
         "data": {
-          "mode": "Protection mode"
+          "mode": "Protection mode",
+          "developer_services": "Developer services"
         },
         "data_description": {
-          "mode": "Key of the protection mode on the hub. `defau` is the default mode (whole object). You can type the key of another mode configured in the Be Wave app."
+          "mode": "Key of the protection mode on the hub. `defau` is the default mode (whole object). You can type the key of another mode configured in the Be Wave app.",
+          "developer_services": "Registers `bewave.debug_patch` and `bewave.debug_send` (raw protocol messages). Only for mapping new devices - a wrong message can restart or reset the hub."
         }
       }
     }
@@ -153,6 +155,145 @@
     "number": {
       "optical_duration": {
         "name": "Light-on time"
+      },
+      "temperature_day": {
+        "name": "Day temperature"
+      },
+      "temperature_night": {
+        "name": "Night temperature"
+      },
+      "temperature_eco": {
+        "name": "Eco temperature"
+      },
+      "temperature_manual": {
+        "name": "Manual temperature"
+      },
+      "temperature_offset": {
+        "name": "Temperature offset"
+      },
+      "boost_time": {
+        "name": "Boost time"
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_day": {
+      "message": "Invalid day {day} (0 = Monday … 6 = Sunday)."
+    },
+    "invalid_time": {
+      "message": "Invalid time window {range} (use HH:MM)."
+    },
+    "end_before_start": {
+      "message": "The window must end after it starts ({range})."
+    },
+    "overlapping_windows": {
+      "message": "Time windows of one day overlap."
+    },
+    "too_many_windows": {
+      "message": "At most 8 time windows per day."
+    },
+    "schedules_not_loaded": {
+      "message": "The schedule list has not arrived from the hub yet - try again in a moment."
+    },
+    "hub_rejected": {
+      "message": "The hub did not accept the change."
+    },
+    "schedule_in_use": {
+      "message": "The schedule is used by: {heads}. Give them another schedule first."
+    },
+    "schedule_not_found": {
+      "message": "No such schedule on the hub."
+    }
+  },
+  "services": {
+    "save_schedule": {
+      "name": "Save heating schedule",
+      "description": "Creates or edits a heating schedule on the hub (weekly time windows; inside a window a head in Schedule mode heats to its day temperature, outside to the night one). Schedules are shared by all heads.",
+      "fields": {
+        "schedule_id": {
+          "name": "Schedule ID",
+          "description": "Empty = create a new schedule."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Up to 30 characters."
+        },
+        "days": {
+          "name": "Days",
+          "description": "{\"0\": [[\"08:00\", \"20:00\"]], …} - 0 = Monday … 6 = Sunday, at most 8 windows a day."
+        }
+      }
+    },
+    "delete_schedule": {
+      "name": "Delete heating schedule",
+      "description": "Deletes a schedule that no head uses.",
+      "fields": {
+        "schedule_id": {
+          "name": "Schedule ID",
+          "description": "ID from the `schedules` attribute of a thermostat."
+        }
+      }
+    },
+    "assign_schedule": {
+      "name": "Assign schedule to head",
+      "description": "Gives the head a schedule (empty = none) and optionally switches it to Schedule mode.",
+      "fields": {
+        "schedule_id": {
+          "name": "Schedule ID",
+          "description": "ID from the `schedules` attribute; empty = no schedule."
+        },
+        "activate": {
+          "name": "Switch to Schedule mode",
+          "description": "Also set the preset to Schedule."
+        }
+      }
+    },
+    "debug_patch": {
+      "name": "Send raw patch (developer)",
+      "description": "Sends one DeviceStateUpdate patch and returns the raw device state before and after. Enable in the integration options.",
+      "fields": {
+        "device": {
+          "name": "Device ID",
+          "description": "Device ID (attribute `serial` / `device_id`)."
+        },
+        "command": {
+          "name": "Command",
+          "description": "Patch command number."
+        },
+        "boolean": {
+          "name": "Boolean value"
+        },
+        "number": {
+          "name": "Number value"
+        },
+        "flt": {
+          "name": "Float value"
+        },
+        "string": {
+          "name": "String value"
+        },
+        "wait": {
+          "name": "Wait (s)",
+          "description": "How long to wait for the new state."
+        }
+      }
+    },
+    "debug_send": {
+      "name": "Send raw message (developer)",
+      "description": "Sends a raw plaintext message (hex) on the integration's session and returns the hub's reply fields. Empty hex = save the last raw configuration to bewave_last_raw.json. Enable in the integration options.",
+      "fields": {
+        "hex": {
+          "name": "Message (hex)",
+          "description": "Plaintext protobuf, hex."
+        },
+        "fields": {
+          "name": "Reply fields",
+          "description": "Only return these top-level fields."
+        },
+        "wait": {
+          "name": "Wait (s)",
+          "description": "How long to collect replies."
+        }
       }
     }
   }
