@@ -1,0 +1,20 @@
+name: Bug report
+description: Something does not work
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened and what did you expect?
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: integration 0.7.0, Home Assistant 2026.x, panel HYBRID 128 Plus fw 1.05
+  - type: textarea
+    id: logs
+    attributes:
+      label: Debug log and diagnostics
+      description: "Enable `logger: logs: custom_components.bewave: debug`, reproduce, attach the log and the diagnostics file."

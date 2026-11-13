@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Docs for AI assistants (`CLAUDE.md`, `AGENTS.md`, `docs/AI_SETUP.md`), `docs/FINDINGS.md` (hub behaviour),
+  `docs/ADDING_DEVICES.md`, extended `docs/PROTOCOL.md`, issue templates.
+
 ## 0.7.0
 
 - **Panel outputs** (O1, O2, …) as switches, with `output_type` (bi / mono pulse).

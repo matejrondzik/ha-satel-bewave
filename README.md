@@ -72,6 +72,13 @@ State changes are **pushed** by the hub (~1 s), so automations react immediately
 - *From Home Assistant*: switch a virtual device that a Be Wave scenario reacts to.
 - *Heating*: set the temperature or preset of thermostat heads from Home Assistant.
 
+## Set up with an AI assistant
+
+Using Claude or another AI to install and configure it? Point it to
+[`docs/AI_SETUP.md`](docs/AI_SETUP.md) - ready-made prompts, safety rules for the assistant, install steps,
+what each device creates and automation recipes. AI coding agents working on the code read
+[`CLAUDE.md`](CLAUDE.md).
+
 ## Requirements
 
 - A BE WAVE Smart HUB or HYBRID control panel reachable from Home Assistant on **TCP port 4200**
@@ -171,6 +178,8 @@ Compared with the original v0.4.4 by @slaveitgr:
 
 Pull requests and new devices are welcome.
 
+- How the hub behaves and why the code works around it: [`docs/FINDINGS.md`](docs/FINDINGS.md).
+- New devices step by step: [`docs/ADDING_DEVICES.md`](docs/ADDING_DEVICES.md) (or open a *New device* issue with diagnostics).
 - Protocol notes: [`docs/PROTOCOL.md`](docs/PROTOCOL.md). `bewave_client.py` is self-contained and can be run
   from the command line (`python3 bewave_client.py status --host … --login … --password …`).
 - Tests: `pip install pytest cryptography && pytest` (protocol helpers, no hub needed).

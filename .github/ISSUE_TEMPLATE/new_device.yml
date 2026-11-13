@@ -1,0 +1,32 @@
+name: New device support
+description: A BE WAVE device that is missing or only partly supported
+labels: [new device]
+body:
+  - type: markdown
+    attributes:
+      value: See docs/ADDING_DEVICES.md. Diagnostics are anonymised (names, serial and credentials removed).
+  - type: input
+    id: model
+    attributes:
+      label: Device model
+      placeholder: e.g. ADC-200 dimmer
+    validations:
+      required: true
+  - type: input
+    id: hub
+    attributes:
+      label: Hub / panel and firmware
+      placeholder: e.g. HYBRID 128 Plus, 1.05
+  - type: textarea
+    id: want
+    attributes:
+      label: What should it do in Home Assistant?
+    validations:
+      required: true
+  - type: textarea
+    id: diag
+    attributes:
+      label: Diagnostics before and after a change
+      description: Download diagnostics, change something in the Be Wave app, download again. Attach both files and say what you changed.
+    validations:
+      required: true
