@@ -79,3 +79,16 @@ def test_discovery_reply():
 
 def test_discovery_ping_is_plain_system_ping():
     assert proto.pb_read(proto.DISCOVERY_PING) == {24: [proto.pb_bytes(1, b"")]}
+
+
+def test_scene_roundtrip():
+    """A routine encodes exactly like the app (deviceOperator and the empty else block are always sent)."""
+    sc = {"id": "a1b2c", "name": "Test", "icon": "lamp-2", "type": "routine", "enabled": True,
+          "conditions": [{"id": "c0ffe", "operator": "AND", "trigger": "SYSTEM_HAS_FAULT", "filter": "EQ", "value": "5"}],
+          "actions": [{"type": "SET_ON_OFF", "value": "1", "devices": [123456789]}]}
+    raw = proto.scene_bytes(sc)
+    msg = proto.pb_bytes(57, proto.pb_bytes(1, proto.pb_bytes(1, raw)))
+    back = proto.parse_scenes(msg)[0]
+    assert back["conditions"][0]["trigger"] == "SYSTEM_HAS_FAULT" and back["conditions"][0]["value"] == "5"
+    assert back["actions"][0] == {"type": "SET_ON_OFF", "value": "1", "devices": [123456789], "duration": 0}
+    assert proto.scene_bytes(back) == raw

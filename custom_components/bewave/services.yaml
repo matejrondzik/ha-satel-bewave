@@ -101,3 +101,30 @@ debug_send:
           min: 1
           max: 30
           unit_of_measurement: s
+
+save_scene:
+  fields:
+    scene:
+      required: true
+      example: '{"name": "Power cut - lights on", "type": "routine", "conditions": [{"operator": "AND", "trigger": "SYSTEM_HAS_FAULT", "filter": "EQ", "value": "5"}], "actions": [{"type": "SET_ON_OFF", "value": "1", "devices": [123456789]}]}'
+      selector:
+        object:
+
+delete_scene:
+  fields:
+    scene_id:
+      required: true
+      selector:
+        text:
+
+run_scene:
+  fields:
+    scene_id:
+      required: true
+      selector:
+        text:
+    state:
+      default: start
+      selector:
+        select:
+          options: [start, pause, resume, stop]

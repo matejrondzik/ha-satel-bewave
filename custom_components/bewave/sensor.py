@@ -48,6 +48,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     _sync()
     entry.async_on_unload(coordinator.async_add_listener(_sync))
+    async_add_entities([BeWaveScenesSensor(coordinator, hub, entry)])
 
 
 class BeWaveSensor(CoordinatorEntity, SensorEntity):
@@ -86,3 +87,42 @@ class BeWaveSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         return _value(self._dev(), self._kind)
+
+
+class BeWaveScenesSensor(CoordinatorEntity, SensorEntity):
+    """Scenes and routines stored in the hub (state = how many; attribute `scenes` = full definitions,
+    device ids resolved to names in `device_names`). Edit them with bewave.save_scene / delete_scene / run_scene."""
+    _attr_has_entity_name = True
+    _attr_translation_key = "scenes"
+    _attr_icon = "mdi:script-text-play-outline"
+
+    def __init__(self, coordinator, hub, entry: ConfigEntry):
+        super().__init__(coordinator)
+        self._hub = hub
+        serial = entry.data.get("serial") or entry.entry_id
+        self._attr_unique_id = f"bewave_{serial}_scenes"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, serial)})
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._hub.scenes is not None
+
+    @property
+    def native_value(self):
+        return len(self._hub.scenes or [])
+
+    @property
+    def extra_state_attributes(self):
+        scenes = self._hub.scenes or []
+        ids = set()
+        def collect(c):
+            ids.update(c.get("devices") or [])
+            for g in c.get("groups") or []:
+                collect(g)
+        for sc in scenes:
+            for c in sc.get("conditions") or []:
+                collect(c)
+            for a in (sc.get("actions") or []) + (sc.get("else_actions") or []):
+                ids.update(a.get("devices") or [])
+        names = {str(i): (self._hub.dev_names.get(i) or {}).get("name") for i in sorted(ids)}
+        return {"scenes": scenes, "device_names": names}

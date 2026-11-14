@@ -158,6 +158,9 @@
       },
       "signal": {
         "name": "Signál"
+      },
+      "scenes": {
+        "name": "Scény a rutiny"
       }
     },
     "select": {
@@ -335,6 +338,40 @@
         "wait": {
           "name": "Čakať (s)",
           "description": "Ako dlho zbierať odpovede."
+        }
+      }
+    },
+    "save_scene": {
+      "name": "Uložiť scénu/rutinu",
+      "description": "Vytvorí alebo upraví scénu či rutinu v ústredni (beží v ústredni aj bez HA). Zapnutie/vypnutie stráženia a vyvolanie poplachu nie je povolené.",
+      "fields": {
+        "scene": {
+          "name": "Scéna",
+          "description": "Celá definícia (pozri atribút scenes senzora Scény a rutiny)."
+        }
+      }
+    },
+    "delete_scene": {
+      "name": "Zmazať scénu/rutinu",
+      "description": "Zmaže scénu alebo rutinu z ústredne.",
+      "fields": {
+        "scene_id": {
+          "name": "ID",
+          "description": "ID scény/rutiny."
+        }
+      }
+    },
+    "run_scene": {
+      "name": "Spustiť scénu",
+      "description": "Spustí, pozastaví, obnoví alebo zastaví scénu.",
+      "fields": {
+        "scene_id": {
+          "name": "ID",
+          "description": "ID scény."
+        },
+        "state": {
+          "name": "Stav",
+          "description": "start, pause, resume, stop"
         }
       }
     }

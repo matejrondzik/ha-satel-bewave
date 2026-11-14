@@ -44,6 +44,8 @@ used from then on. It also closes idle sessions after ~2.7 s, so send a keepaliv
 | 44 | StructureGet | rooms, devices, configuration (response 45) |
 | 46 | StructureGetSchedule | heating schedules (response 47) |
 | 50 | StructureUpdateSchedule | replace the whole schedule list (response 51) |
+| 56 | StructureGetScenes | scenes + routines (response 57) |
+| 70 / 72 / 74 | StructureUpsertScene / UpdateSceneState / DeleteScene | create-update / start-stop / delete (responses 71 / 73 / 75); accepted on the integration's session |
 | 64 | DeviceStateGetChanges | measurement history only |
 | 66 | DeviceStateUpdate | device commands (below); the response (67) is empty even on success, so verify via state |
 | 88 | SystemMessage | pushed state changes (response 89) |
@@ -177,3 +179,41 @@ temperature, outside to the night one. Heads reference a schedule by patch 50 (s
 ## Never send
 
 `SystemTrigger` (fields 1–3: restart, factory reset, firmware update). The integration never sends them.
+
+
+## Scenes and routines (StructureGetScenes 56/57, Upsert 70/71, UpdateSceneState 72/73, Delete 74/75)
+
+They are stored **and run in the hub** - also without Home Assistant, the network or mains power.
+
+`Scene {id 1, name 2, icon 3, type 4 (0 scene run by hand, 1 routine), status 5, isEnabled 6, isNotificationEnabled 7,
+roomId 8, triggerActions 9 {actions 1[Action]}, triggerConditions 10 {conditions 1[Condition]}, useInShortcuts 11,
+shortcutToken 12, triggerActionsElse 13 {actions 1[Action]}}` - actions in 13 run when the condition stops being true.
+
+`Condition {id 1, Operator 2 (0 AND, 1 OR, 2 SUM), expression 3 {trigger 1, filter 2 (EQ NE LT GT GE LE), value 3 (string),
+deviceIds 4[HubDeviceKey], deviceOperator 5}, expressions 4[Condition]}` ·
+`Action {type 1, value 2 (string), deviceIds 3[HubDeviceKey], duration 4}`.
+
+Request wrappers: `70 {1 {scene 1, isUpdate 2}}`, `72 {1 {sceneId 1, state 2 (0 start, 1 pause, 2 resume, 3 stop)}}`,
+`74 {1 {sceneId 1}}`. The app always sends `deviceOperator` (even 0) and the else block 13 (even empty) - the
+integration does the same, so a routine read from the hub re-encodes byte for byte.
+
+Triggers: 0 ARMING_ALARM, 1 ARMING_MODE_ON, 2 ARMING_MODE_ON_PARTIAL, 3 ARMING_MODE_OFF, 4 CRON_EXPRESSION,
+5 SENSOR_ALARM_DETECTED, 6 SENSOR_MOTION, 7 SENSOR_DUSK, 8 SENSOR_VIBRATION, 9 SENSOR_FLOOD, 10 SENSOR_MAGNETIC,
+11 SENSOR_GLASS_BREAK, 12 SENSOR_SMOKE, 13 SENSOR_GAS, 14 SENSOR_TEMPERATURE, 15 SENSOR_PRESSURE, 16 SENSOR_HUMIDITY,
+17 SCHEDULE_SELECTED, 18 ASTRONOMICAL_CLOCK, 19/20 POWER_CONSUMPTION_CURRENT/TOTAL, 21 IS_HOUSE_EMPTY, 22 IS_POWERED_ON,
+23 IS_PARENTAL_CONTROL_ENABLED, 24 GEOFENCING, 25 BUTTON, 26 INPUT_STATE, 27 VALVE_OPENING, 28 VOLTAGE_SUPPLY,
+29 ARMING_WARNING_ALARM_ON, 30 SENSOR_WARNING_ALARM_DETECTED, 31 NFC_CARD_READ, 32 INPUT_VALUE, 33 DEVICE_HAS_FAULT,
+34 SYSTEM_HAS_FAULT, 35 ENTRY_TIME, 36 EXIT_TIME, 37 VIOLATION.
+`SYSTEM_HAS_FAULT` value: `"A"` any hub trouble, `"D"` any device trouble, or a hub error code (`"5"` mains power
+failure, `"2"` battery low, `"6"` Ethernet disconnected - the `SystemInfo_Details_HubErrorCode` list).
+`ARMING_MODE_*` value = arming-mode id.
+
+Actions: 0 SET_ON_OFF ("1"/"0"), 2 SET_BLOCK_UNBLOCK, 3 SET_SHUTTER_VALUE, 4 SET_SHUTTER_INCLINATION_VALUE,
+5 INVOKE_SHUTTER_INTERRUPT_SIGNAL, 6 SET_COLOR_BRIGHTENING_TIME, 7 SET_HEATER_FORCED_VALUE, 8 SET_HEATER_WORKING_MODE,
+9 SET_HEATER_PARENTAL_CONTROL, 10 SET_HEATER_BOOST, 11 SET_ALARM_ACOUSTIC, 12 SET_ALARM_OPTICAL, 13 TURN_ON_ALARM_MODE,
+14 TURN_OFF_ALARM_MODE, 15 INVOKE_MAKE_PICTURE, 16 INVOKE_PRESENCE_SIMULATION, 17 DELAY, 18 SET_COLOR_CONTROL_RGB,
+19 SET_COLOR_CONTROL_CW, 20 RUN_SCENE, 21 TRIGGER_AN_ALARM, 22 INVOKE_NOTIFICATION, 23 INVOKE_CHIME, 24 APN_CONTROL.
+The integration refuses 13, 14, 21 and 24 (arming, disarming, alarms).
+
+In Home Assistant: sensor "Scenes and routines" (attribute `scenes`) and services `bewave.save_scene`,
+`bewave.delete_scene`, `bewave.run_scene`.

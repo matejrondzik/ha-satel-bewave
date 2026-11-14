@@ -158,6 +158,9 @@
       },
       "signal": {
         "name": "Signal"
+      },
+      "scenes": {
+        "name": "Scenes and routines"
       }
     },
     "select": {
@@ -335,6 +338,40 @@
         "wait": {
           "name": "Wait (s)",
           "description": "How long to collect replies."
+        }
+      }
+    },
+    "save_scene": {
+      "name": "Save scene / routine",
+      "description": "Create or update a scene or routine in the hub (it runs in the hub, also without Home Assistant). Arming, disarming and alarm actions are refused.",
+      "fields": {
+        "scene": {
+          "name": "Scene",
+          "description": "Full definition (see the scenes attribute of the Scenes and routines sensor)."
+        }
+      }
+    },
+    "delete_scene": {
+      "name": "Delete scene / routine",
+      "description": "Delete a scene or routine from the hub.",
+      "fields": {
+        "scene_id": {
+          "name": "ID",
+          "description": "Scene / routine id."
+        }
+      }
+    },
+    "run_scene": {
+      "name": "Run scene",
+      "description": "Start, pause, resume or stop a scene.",
+      "fields": {
+        "scene_id": {
+          "name": "ID",
+          "description": "Scene id."
+        },
+        "state": {
+          "name": "State",
+          "description": "start, pause, resume, stop"
         }
       }
     }

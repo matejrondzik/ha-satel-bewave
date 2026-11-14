@@ -23,7 +23,7 @@ using the same encrypted protocol as the Be Wave mobile app.
 |---|---|
 | `alarm_control_panel` | Arm away / disarm the chosen protection mode, live state pushed from the hub |
 | `binary_sensor` | Detectors (PIR, door/window, BUS detectors), **flood detectors** (AFD-200), **wired zone inputs** of the panel (Z1, Z2, … – smoke detector, door, gate, … chosen in the setup), **keypad lockout**; **tamper** and **trouble** of the hub and of every device, with readable descriptions (e.g. *Tamper (cover open)*, *Valve out of range*, *Low battery*) |
-| `sensor` | Temperature, battery, signal and supply voltage of devices, **valve opening** of thermostat heads |
+| `sensor` | Temperature, battery, signal and supply voltage of devices, **valve opening** of thermostat heads, **scenes and routines** stored in the hub (full definitions in the attributes) |
 | `climate` | **ART-210 thermostat heads**: target temperature (0.1 °C), room temperature from the head's reference sensor, valve-based HVAC action, presets *manual / schedule / eco / boost*, schedule name |
 | `number` | Head settings: day / night / eco / manual temperature, **temperature offset**, boost time; temperature offset of detectors; light-on time of SLIM LUNA detectors |
 | `select` | **Heating mode (whole house)**: one control that switches every thermostat head (manual / schedule / eco / boost), including heads added later. Shows *Mixed* when the heads differ. |
@@ -51,6 +51,9 @@ using the same encrypted protocol as the Be Wave mobile app.
 | `bewave.save_schedule` | Create or edit a heating schedule on the hub (weekly time windows, shared by all heads) |
 | `bewave.delete_schedule` | Delete a schedule no head uses |
 | `bewave.assign_schedule` | Give a head a schedule and optionally switch it to *schedule* mode |
+| `bewave.save_scene` | Create or edit a **scene or routine stored in the hub** (it runs in the hub itself - also without Home Assistant, the network or mains power). Arming, disarming and alarm actions are refused |
+| `bewave.delete_scene` | Delete a scene or routine from the hub |
+| `bewave.run_scene` | Start, pause, resume or stop a scene |
 
 Schedules (id, name, windows) are in the `schedules` attribute of every thermostat. Example:
 

@@ -353,6 +353,146 @@ def schedules_plaintext(schedules):
     return pb_bytes(SCHEDULE_UPDATE, pb_bytes(1, items))
 
 
+
+# --- scenes & routines (StructureGetScenes f56/f57, Upsert f70/f71, UpdateSceneState f72/f73, Delete f74/f75) -----
+# Scene {id 1, name 2, icon 3, type 4 (0 BUTTON = scene run by hand, 1 CONDITION = routine), status 5, isEnabled 6,
+#        isNotificationEnabled 7, roomId 8, triggerActions 9 {actions 1[Action]}, triggerConditions 10 {conditions 1[Cond]},
+#        useInShortcuts 11, shortcutToken 12, triggerActionsElse 13 {actions 1[Action]}}
+# Cond {id 1, Operator 2, expression 3 {trigger 1, filter 2, value 3 (string), deviceIds 4[HubDeviceKey], deviceOperator 5},
+#       expressions 4[Cond]}            Action {type 1, value 2 (string), deviceIds 3[HubDeviceKey], duration 4}
+# Values are strings: on/off "1"/"0", SYSTEM_HAS_FAULT "A" any hub trouble, "D" any device trouble, or a hub error
+# code number (5 = mains power failure); ARMING_MODE_* = arming-mode id.
+SCENES_GET = 56
+SCENE_TYPES = ["scene", "routine"]                       # BUTTON, CONDITION
+SCENE_STATES = {"start": 0, "pause": 1, "resume": 2, "stop": 3}
+SCENE_OPERATORS = ["AND", "OR", "SUM"]
+SCENE_FILTERS = ["EQ", "NE", "LT", "GT", "GE", "LE"]
+SCENE_TRIGGERS = ("ARMING_ALARM ARMING_MODE_ON ARMING_MODE_ON_PARTIAL ARMING_MODE_OFF CRON_EXPRESSION SENSOR_ALARM_DETECTED "
+                  "SENSOR_MOTION SENSOR_DUSK SENSOR_VIBRATION SENSOR_FLOOD SENSOR_MAGNETIC SENSOR_GLASS_BREAK SENSOR_SMOKE "
+                  "SENSOR_GAS SENSOR_TEMPERATURE SENSOR_PRESSURE SENSOR_HUMIDITY SCHEDULE_SELECTED ASTRONOMICAL_CLOCK "
+                  "POWER_CONSUMPTION_CURRENT POWER_CONSUMPTION_TOTAL IS_HOUSE_EMPTY IS_POWERED_ON IS_PARENTAL_CONTROL_ENABLED "
+                  "GEOFENCING BUTTON INPUT_STATE VALVE_OPENING VOLTAGE_SUPPLY ARMING_WARNING_ALARM_ON "
+                  "SENSOR_WARNING_ALARM_DETECTED NFC_CARD_READ INPUT_VALUE DEVICE_HAS_FAULT SYSTEM_HAS_FAULT ENTRY_TIME "
+                  "EXIT_TIME VIOLATION").split()
+SCENE_ACTIONS = {0: "SET_ON_OFF", 2: "SET_BLOCK_UNBLOCK", 3: "SET_SHUTTER_VALUE", 4: "SET_SHUTTER_INCLINATION_VALUE",
+                 5: "INVOKE_SHUTTER_INTERRUPT_SIGNAL", 6: "SET_COLOR_BRIGHTENING_TIME", 7: "SET_HEATER_FORCED_VALUE",
+                 8: "SET_HEATER_WORKING_MODE", 9: "SET_HEATER_PARENTAL_CONTROL", 10: "SET_HEATER_BOOST",
+                 11: "SET_ALARM_ACOUSTIC", 12: "SET_ALARM_OPTICAL", 13: "TURN_ON_ALARM_MODE", 14: "TURN_OFF_ALARM_MODE",
+                 15: "INVOKE_MAKE_PICTURE", 16: "INVOKE_PRESENCE_SIMULATION", 17: "DELAY", 18: "SET_COLOR_CONTROL_RGB",
+                 19: "SET_COLOR_CONTROL_CW", 20: "RUN_SCENE", 21: "TRIGGER_AN_ALARM", 22: "INVOKE_NOTIFICATION",
+                 23: "INVOKE_CHIME", 24: "APN_CONTROL"}
+SCENE_ACTION_CODES = {v: k for k, v in SCENE_ACTIONS.items()}
+# actions that arm/disarm or raise an alarm - never written from Home Assistant
+SCENE_FORBIDDEN_ACTIONS = {"TURN_ON_ALARM_MODE", "TURN_OFF_ALARM_MODE", "TRIGGER_AN_ALARM", "APN_CONTROL"}
+
+
+def _sv(d, k, dv=None):
+    return d.get(k, [dv])[0]
+
+
+def _scene_action(raw):
+    a = pb_read(raw)
+    t = _sv(a, 1, 0)
+    return {"type": SCENE_ACTIONS.get(t, t), "value": _s(_sv(a, 2, b"")),
+            "devices": [key_to_id(x) for x in a.get(3, [])], "duration": _sv(a, 4, 0)}
+
+
+def _scene_cond(raw):
+    c = pb_read(raw)
+    out = {"id": _s(_sv(c, 1, b"")), "operator": SCENE_OPERATORS[_sv(c, 2, 0)] if _sv(c, 2, 0) < 3 else _sv(c, 2, 0)}
+    if 3 in c:
+        e = pb_read(c[3][0])
+        t, f = _sv(e, 1, 0), _sv(e, 2, 0)
+        out.update({"trigger": SCENE_TRIGGERS[t] if t < len(SCENE_TRIGGERS) else t,
+                    "filter": SCENE_FILTERS[f] if f < len(SCENE_FILTERS) else f, "value": _s(_sv(e, 3, b"")),
+                    "devices": [key_to_id(x) for x in e.get(4, [])], "device_operator": _sv(e, 5, 0)})
+    if 4 in c:
+        out["groups"] = [_scene_cond(x) for x in c[4]]
+    return out
+
+
+def parse_scenes(plaintext):
+    """f57 -> list of scene dicts; None if the message carries no list."""
+    d = pb_read(plaintext)
+    if 57 not in d:
+        return None
+    body = d[57][-1]
+    if not body:
+        return None
+    pl = pb_read(body).get(1)
+    if not pl:
+        return []
+    out = []
+    for raw in pb_read(pl[0]).get(1, []):
+        sc = pb_read(raw)
+        t = _sv(sc, 4, 0)
+        out.append({
+            "id": _s(_sv(sc, 1, b"")), "name": _s(_sv(sc, 2, b"")), "icon": _s(_sv(sc, 3, b"")),
+            "type": SCENE_TYPES[t] if t < 2 else t, "status": _sv(sc, 5, 0), "enabled": bool(_sv(sc, 6, 0)),
+            "notify": bool(_sv(sc, 7, 0)), "room": _s(_sv(sc, 8, b"")),
+            "conditions": [_scene_cond(x) for x in pb_read(sc[10][0]).get(1, [])] if 10 in sc else [],
+            "actions": [_scene_action(x) for x in pb_read(sc[9][0]).get(1, [])] if 9 in sc else [],
+            "else_actions": [_scene_action(x) for x in pb_read(sc[13][0]).get(1, [])] if 13 in sc else [],
+            "shortcut": bool(_sv(sc, 11, 0)), "shortcut_token": _s(_sv(sc, 12, b""))})
+    return out
+
+
+def _enc_str(f, v):
+    return pb_bytes(f, str(v).encode()) if v not in (None, "") else b""
+
+
+def _enc_int(f, v):
+    return pb_varint(f, int(v)) if v else b""
+
+
+def _enc_action(a):
+    t = a.get("type", "SET_ON_OFF")
+    t = SCENE_ACTION_CODES[t] if isinstance(t, str) else int(t)
+    return (_enc_int(1, t) + _enc_str(2, a.get("value", "")) + b"".join(pb_bytes(3, key_bytes(int(d))) for d in a.get("devices") or [])
+            + _enc_int(4, a.get("duration", 0)))
+
+
+def _enc_cond(c):
+    op = c.get("operator", "AND")
+    b = _enc_str(1, c.get("id")) + _enc_int(2, SCENE_OPERATORS.index(op) if isinstance(op, str) else op)
+    if "trigger" in c:
+        t, f = c["trigger"], c.get("filter", "EQ")
+        e = (_enc_int(1, SCENE_TRIGGERS.index(t) if isinstance(t, str) else t)
+             + _enc_int(2, SCENE_FILTERS.index(f) if isinstance(f, str) else f) + _enc_str(3, c.get("value", ""))
+             + b"".join(pb_bytes(4, key_bytes(int(d))) for d in c.get("devices") or [])
+             + pb_varint(5, int(c.get("device_operator", 0) or 0)))   # the app always sends field 5
+        b += pb_bytes(3, e)
+    for g in c.get("groups") or []:
+        b += pb_bytes(4, _enc_cond(g))
+    return b
+
+
+def scene_bytes(sc):
+    t = sc.get("type", "routine")
+    b = (_enc_str(1, sc["id"]) + _enc_str(2, sc.get("name")) + _enc_str(3, sc.get("icon"))
+         + _enc_int(4, SCENE_TYPES.index(t) if isinstance(t, str) else t) + _enc_int(5, sc.get("status", 0))
+         + _enc_int(6, 1 if sc.get("enabled", True) else 0) + _enc_int(7, 1 if sc.get("notify") else 0) + _enc_str(8, sc.get("room")))
+    if sc.get("actions"):
+        b += pb_bytes(9, b"".join(pb_bytes(1, _enc_action(a)) for a in sc["actions"]))
+    if sc.get("conditions"):
+        b += pb_bytes(10, b"".join(pb_bytes(1, _enc_cond(c)) for c in sc["conditions"]))
+    b += _enc_int(11, 1 if sc.get("shortcut") else 0) + _enc_str(12, sc.get("shortcut_token"))
+    # the app always sends the "else" block, empty when unused
+    b += pb_bytes(13, b"".join(pb_bytes(1, _enc_action(a)) for a in sc.get("else_actions") or []))
+    return b
+
+
+def scene_upsert_plaintext(sc, is_update):
+    return pb_bytes(70, pb_bytes(1, pb_bytes(1, scene_bytes(sc)) + (pb_varint(2, 1) if is_update else b"")))
+
+
+def scene_state_plaintext(scene_id, state):
+    return pb_bytes(72, pb_bytes(1, _enc_str(1, scene_id) + _enc_int(2, SCENE_STATES[state])))
+
+
+def scene_delete_plaintext(scene_id):
+    return pb_bytes(74, pb_bytes(1, _enc_str(1, scene_id)))
+
 # Hub main-board outputs share device uuid 1 and differ by HubDeviceKey field 2 (O1 = 5, O2 = 6, ...).
 # They get a composite id uuid*1000+index (1005, 1006); real devices (uuid >= 1000) keep their uuid.
 COMPOSITE = {}   # composite id -> (uuid, index)

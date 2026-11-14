@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.0
+- Scenes and routines stored in the hub: sensor "Scenes and routines" and services `bewave.save_scene`, `bewave.delete_scene`, `bewave.run_scene` (they run in the hub, also without Home Assistant or mains power). Arming, disarming and alarm actions are refused.
+
 ## 0.8.0
 
 - **Finds hubs on the network** like the app (UDP 4111 broadcast): the setup lists hubs with name and

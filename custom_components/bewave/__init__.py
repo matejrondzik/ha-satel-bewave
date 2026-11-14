@@ -8,6 +8,8 @@ import threading
 import time
 from datetime import timedelta
 
+import voluptuous as vol
+
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY, ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
@@ -78,6 +80,8 @@ class BeWaveHub:
         self.state: str | None = None          # armed_away | disarmed | None
         self.flags = {"led": None, "grade2": None, "satel": None}
         self.schedules = None            # heating schedules from the hub (None = not received yet)
+        self.scenes = None               # scenes + routines from the hub (None = not received yet)
+        self.scene_reply = {}            # last StructureUpsert/UpdateState/Delete scene replies (71/73/75)
         self.info = {"power": None, "stor_free": None, "stor_total": None,
                      "network": None, "firmware": None, "errors": None, "errors_memory": None}
         self.dev_names: dict[int, dict] = {}   # config: name/room/model/sysnum/bypass
@@ -223,6 +227,7 @@ class BeWaveHub:
         for _fd, pt in msgs:
             if not pt:
                 continue
+            top = {}
             try:  # keep the last raw config / schedule list for debugging (bewave.debug_send dump)
                 top = proto.pb_read(pt)
                 for k in (45, 47, 51):
@@ -254,6 +259,12 @@ class BeWaveHub:
             sch = proto.parse_schedules(pt)
             if sch is not None:
                 self.schedules = sch
+            scn = proto.parse_scenes(pt)
+            if scn is not None:
+                self.scenes = scn
+            for k in (71, 73, 75):
+                if k in top:
+                    self.scene_reply[k] = (_fd or {}).get(10, 0) if isinstance(_fd, dict) else 0
             cfg = proto.parse_config_devices(pt)
             for did, d in cfg.items():
                 self.dev_names[did] = {k: d[k] for k in ("name", "room", "type", "model", "sysnum", "bypass", "hwtype", "output_type")}
@@ -349,6 +360,38 @@ class BeWaveHub:
                 self.schedules = [dict(x) for x in schedules]
             return ok
 
+    # ---- scenes / routines (stored and run by the hub itself, also without Home Assistant) ----------------
+    def _scene_cmd(self, plaintext, reply_field):
+        """One scene request; succeeds when the hub answers with its reply message."""
+        with self._lock:
+            self.scene_reply.pop(reply_field, None)
+            ok = self._command(lambda: self.conn.send_command(plaintext),
+                                 verify=lambda: reply_field in self.scene_reply)
+            if ok and self.scene_reply.get(reply_field):
+                _LOGGER.warning("BE WAVE: scene request %s refused, error %s", reply_field - 1, self.scene_reply[reply_field])
+                return False
+            return ok
+
+    def upsert_scene(self, scene):
+        bad = {a.get("type") for a in (scene.get("actions") or []) + (scene.get("else_actions") or [])} & proto.SCENE_FORBIDDEN_ACTIONS
+        if bad:
+            raise ValueError(f"actions not allowed from Home Assistant: {', '.join(sorted(bad))}")
+        is_update = any(x["id"] == scene["id"] for x in (self.scenes or []))
+        ok = self._scene_cmd(proto.scene_upsert_plaintext(scene, is_update), 71)
+        if ok:
+            lst = [x for x in (self.scenes or []) if x["id"] != scene["id"]]
+            self.scenes = lst + [dict(scene)]
+        return ok
+
+    def delete_scene(self, scene_id):
+        ok = self._scene_cmd(proto.scene_delete_plaintext(scene_id), 75)
+        if ok and self.scenes is not None:
+            self.scenes = [x for x in self.scenes if x["id"] != scene_id]
+        return ok
+
+    def set_scene_state(self, scene_id, state):
+        return self._scene_cmd(proto.scene_state_plaintext(scene_id, state), 73)
+
     def assign_schedule(self, devid, schedule_id, activate):
         """Give a head a schedule ("" = none) and optionally switch it to schedule mode. Patches go one by one with a
         pause: assigning a schedule puts the head back to manual mode."""
@@ -439,9 +482,56 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         sw_version=hub.info.get("firmware"),
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    _register_scene_services(hass)
     if entry.options.get(CONF_DEV_SERVICES):
         _register_debug_service(hass)
     return True
+
+
+def _register_scene_services(hass: HomeAssistant) -> None:
+    """bewave.save_scene / delete_scene / run_scene - scenes and routines live in the hub and run there
+    (also when Home Assistant or the network is down). Arming, disarming and alarm actions are refused."""
+    if hass.services.has_service(DOMAIN, "save_scene"):
+        return
+
+    def _hub() -> BeWaveHub:
+        return next(iter(hass.data[DOMAIN].values()))["hub"]
+
+    def _norm(d):
+        sc = dict(d)
+        sc.setdefault("id", secrets.token_hex(3)[:5])
+        sc.setdefault("type", "routine")
+        sc.setdefault("icon", "lamp-2")
+        sc.setdefault("enabled", True)
+        for c in sc.get("conditions") or []:
+            c.setdefault("id", secrets.token_hex(3)[:5])
+        return sc
+
+    async def _save(call: ServiceCall):
+        hub = _hub()
+        sc = _norm(call.data["scene"])
+        try:
+            ok = await hass.async_add_executor_job(hub.upsert_scene, sc)
+        except ValueError as err:
+            return {"ok": False, "error": str(err)}
+        return {"ok": ok, "scene": sc}
+
+    async def _delete(call: ServiceCall):
+        ok = await hass.async_add_executor_job(_hub().delete_scene, call.data["scene_id"])
+        return {"ok": ok}
+
+    async def _run(call: ServiceCall):
+        ok = await hass.async_add_executor_job(_hub().set_scene_state, call.data["scene_id"], call.data.get("state", "start"))
+        return {"ok": ok}
+
+    hass.services.async_register(DOMAIN, "save_scene", _save, schema=vol.Schema({vol.Required("scene"): dict}),
+                                 supports_response=SupportsResponse.OPTIONAL)
+    hass.services.async_register(DOMAIN, "delete_scene", _delete, schema=vol.Schema({vol.Required("scene_id"): str}),
+                                 supports_response=SupportsResponse.OPTIONAL)
+    hass.services.async_register(DOMAIN, "run_scene", _run,
+                                 schema=vol.Schema({vol.Required("scene_id"): str,
+                                                    vol.Optional("state", default="start"): vol.In(list(proto.SCENE_STATES))}),
+                                 supports_response=SupportsResponse.OPTIONAL)
 
 
 def _register_debug_service(hass: HomeAssistant) -> None:
