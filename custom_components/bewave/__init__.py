@@ -30,28 +30,47 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 DISCOVERY_INTERVAL = timedelta(minutes=30)
 
 
+SCAN_COOLDOWN = 120  # s - minimum gap between discovery scans triggered by connection failures
+_last_scan = 0.0
+
+
+async def _async_scan(hass: HomeAssistant) -> None:
+    """Broadcast a discovery ping (UDP 4111): new hubs show up under *Discovered*, a configured
+    hub that got a new IP address is updated (the flow aborts with the new host)."""
+    global _last_scan
+    _last_scan = time.monotonic()
+    targets = ["255.255.255.255"]
+    try:
+        from homeassistant.components import network
+        targets += [str(a) for a in await network.async_get_ipv4_broadcast_addresses(hass)]
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        found = await hass.async_add_executor_job(proto.discover, tuple(dict.fromkeys(targets)), 2.0)
+    except OSError as err:
+        _LOGGER.debug("BE WAVE discovery failed: %s", err)
+        return
+    entries = {e.unique_id: e for e in hass.config_entries.async_entries(DOMAIN)}
+    for serial, info in found.items():
+        e = entries.get(f"bewave_{serial}")
+        if e is not None and e.data.get(CONF_HOST) == info["host"]:
+            continue                     # known hub at the same address - nothing to do
+        if e is not None:
+            _LOGGER.warning("BE WAVE hub %s moved from %s to %s", serial, e.data.get(CONF_HOST), info["host"])
+        discovery_flow.async_create_flow(hass, DOMAIN, context={"source": SOURCE_INTEGRATION_DISCOVERY}, data=info)
+
+
+def _scan_after_failure(hass: HomeAssistant) -> None:
+    """The hub may have got a new DHCP address (e.g. after a power cut) - look for it, rate limited."""
+    if time.monotonic() - _last_scan >= SCAN_COOLDOWN:
+        hass.async_create_task(_async_scan(hass))
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Look for hubs on the LAN (UDP 4111) after start and every 30 min: new hubs show up under
-    *Discovered*, a configured hub that got a new IP address is updated (the flow aborts with the new host)."""
+    """Look for hubs on the LAN after start and every 30 min (and after connection failures)."""
 
     async def _scan(_now=None) -> None:
-        targets = ["255.255.255.255"]
-        try:
-            from homeassistant.components import network
-            targets += [str(a) for a in await network.async_get_ipv4_broadcast_addresses(hass)]
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            found = await hass.async_add_executor_job(proto.discover, tuple(dict.fromkeys(targets)), 2.0)
-        except OSError as err:
-            _LOGGER.debug("BE WAVE discovery failed: %s", err)
-            return
-        entries = {e.unique_id: e for e in hass.config_entries.async_entries(DOMAIN)}
-        for serial, info in found.items():
-            e = entries.get(f"bewave_{serial}")
-            if e is not None and e.data.get(CONF_HOST) == info["host"]:
-                continue                     # known hub at the same address - nothing to do
-            discovery_flow.async_create_flow(hass, DOMAIN, context={"source": SOURCE_INTEGRATION_DISCOVERY}, data=info)
+        await _async_scan(hass)
 
     async def _started(_event=None) -> None:
         await _scan()
@@ -436,7 +455,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(_async_reload))
 
     async def _update():
-        return await hass.async_add_executor_job(hub.poll)
+        try:
+            return await hass.async_add_executor_job(hub.poll)
+        except UpdateFailed:
+            _scan_after_failure(hass)
+            raise
 
     coordinator = DataUpdateCoordinator(
         hass, _LOGGER, name=DOMAIN, update_method=_update,

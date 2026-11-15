@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.1
+- When the hub cannot be reached (also while setup is retrying), the integration looks for it on the network right away (at most every 2 min) instead of waiting up to 30 min. A hub that got a new IP address after a power cut reconnects within a minute or two.
+
 ## 0.9.0
 - Scenes and routines stored in the hub: sensor "Scenes and routines" and services `bewave.save_scene`, `bewave.delete_scene`, `bewave.run_scene` (they run in the hub, also without Home Assistant or mains power). Arming, disarming and alarm actions are refused.
 
