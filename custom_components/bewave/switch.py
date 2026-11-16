@@ -87,9 +87,16 @@ class BeWaveDeviceSwitch(CoordinatorEntity, SwitchEntity):
         self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs):
+        if self._dev().get("output_type") == "mono":
+            # one pulse only; a verify/retry would send a second pulse
+            await self.hass.async_add_executor_job(self._hub.pulse, self._devid)
+            self.async_write_ha_state()
+            return
         await self._set(True)
 
     async def async_turn_off(self, **kwargs):
+        if self._dev().get("output_type") == "mono":
+            return  # MONO turns itself off; an OFF command could re-trigger
         await self._set(False)
 
 

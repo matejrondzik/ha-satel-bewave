@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.2
+- Outputs set to MONO (pulse) mode get exactly one ON command. Before, the read-back after the command saw the output already off again, treated it as a failure and sent the command a second time, so a gate got two pulses (opened and stopped). OFF is ignored for MONO outputs.
+
 ## 0.9.1
 - When the hub cannot be reached (also while setup is retrying), the integration looks for it on the network right away (at most every 2 min) instead of waiting up to 30 min. A hub that got a new IP address after a power cut reconnects within a minute or two.
 

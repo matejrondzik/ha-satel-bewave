@@ -320,16 +320,17 @@ class BeWaveHub:
                         "options": st.get("options"), "raw": st.get("raw")})
         return out
 
-    def _command(self, send, verify=None):
+    def _command(self, send, verify=None, single_shot=False):
         """Run a command on a live session, verifying + retrying on a fresh
         connection if the socket was stale (commands are lost on a dead socket).
-        Caller holds the lock."""
+        single_shot: never send twice (MONO outputs: a resend = second pulse,
+        e.g. a gate would stop/reverse). Caller holds the lock."""
         last = None
         # the hub drops a command that arrives right after the previous one -> keep a minimal gap
         gap = 1.5 - (time.monotonic() - getattr(self, "_last_cmd", 0))
         if gap > 0:
             time.sleep(gap)
-        for attempt in (1, 2):
+        for attempt in ((1,) if single_shot else (1, 2)):
             try:
                 self._ensure()
                 send()
@@ -363,6 +364,15 @@ class BeWaveHub:
         with self._lock:
             self._command(lambda: self.conn.set_on_off(devid, desired),
                           verify=lambda: self.dev_state.get(devid, {}).get("on_off") == desired)
+
+    def pulse(self, devid):
+        """MONO output: exactly one ON command, no verify and no resend (the hub
+        times the pulse and drops the output back to off by itself)."""
+        with self._lock:
+            # reconnect BEFORE sending if the session has gone quiet, never after
+            if self.conn is None or getattr(self, "_empty", 0):
+                self._reconnect()
+            return self._command(lambda: self.conn.set_on_off(devid, True), single_shot=True)
 
     def set_patch(self, devid, command, verify=None, **values):
         """Send one DeviceStateUpdate patch (e.g. heater target / mode) and verify via state."""
