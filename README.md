@@ -1,4 +1,4 @@
-<img src="custom_components/bewave/brand/logo.png" alt="BE WAVE" height="64">
+<img src="custom_components/satel_bewave/brand/logo.png" alt="BE WAVE" height="64">
 
 # BE WAVE (Satel) for Home Assistant
 
@@ -48,17 +48,17 @@ using the same encrypted protocol as the Be Wave mobile app.
 
 | Service | What it does |
 |---|---|
-| `bewave.save_schedule` | Create or edit a heating schedule on the hub (weekly time windows, shared by all heads) |
-| `bewave.delete_schedule` | Delete a schedule no head uses |
-| `bewave.assign_schedule` | Give a head a schedule and optionally switch it to *schedule* mode |
-| `bewave.save_scene` | Create or edit a **scene or routine stored in the hub** (it runs in the hub itself - also without Home Assistant, the network or mains power). Arming, disarming and alarm actions are refused |
-| `bewave.delete_scene` | Delete a scene or routine from the hub |
-| `bewave.run_scene` | Start, pause, resume or stop a scene |
+| `satel_bewave.save_schedule` | Create or edit a heating schedule on the hub (weekly time windows, shared by all heads) |
+| `satel_bewave.delete_schedule` | Delete a schedule no head uses |
+| `satel_bewave.assign_schedule` | Give a head a schedule and optionally switch it to *schedule* mode |
+| `satel_bewave.save_scene` | Create or edit a **scene or routine stored in the hub** (it runs in the hub itself - also without Home Assistant, the network or mains power). Arming, disarming and alarm actions are refused |
+| `satel_bewave.delete_scene` | Delete a scene or routine from the hub |
+| `satel_bewave.run_scene` | Start, pause, resume or stop a scene |
 
 Schedules (id, name, windows) are in the `schedules` attribute of every thermostat. Example:
 
 ```yaml
-action: bewave.save_schedule
+action: satel_bewave.save_schedule
 target:
   entity_id: climate.radiator_living_room
 data:
@@ -100,7 +100,17 @@ what each device creates and automation recipes. AI coding agents working on the
 3. Restart Home Assistant.
 
 ### Manual
-Copy `custom_components/bewave/` into `config/custom_components/` and restart Home Assistant.
+Copy `custom_components/satel_bewave/` into `config/custom_components/` and restart Home Assistant.
+
+## Upgrading from 0.9 (domain `bewave` → `satel_bewave`)
+
+Version 0.10 renamed the integration domain, because `bewave` is taken by another integration in HACS.
+Home Assistant treats it as a new integration, so:
+
+1. Note your automations and scripts that call `bewave.*` services and change them to `satel_bewave.*`.
+2. Remove the *BE WAVE (Satel)* integration (Settings → Devices & services) and delete `config/custom_components/bewave/`.
+3. Install this version (HACS or manual copy to `config/custom_components/satel_bewave/`), restart and add the integration again.
+   Entity ids are built from the device names, so they come back the same once the old entities are gone.
 
 ## Setup
 
@@ -192,8 +202,8 @@ Pull requests and new devices are welcome.
 - Protocol notes: [`docs/PROTOCOL.md`](docs/PROTOCOL.md). `bewave_client.py` is self-contained and can be run
   from the command line (`python3 bewave_client.py status --host … --login … --password …`).
 - Tests: `pip install pytest cryptography && pytest` (protocol helpers, no hub needed).
-- **Mapping a new device:** enable *Developer services* in the integration options. `bewave.debug_patch`
-  sends one setting to a device and returns its raw state before / after; `bewave.debug_send` with empty
+- **Mapping a new device:** enable *Developer services* in the integration options. `satel_bewave.debug_patch`
+  sends one setting to a device and returns its raw state before / after; `satel_bewave.debug_send` with empty
   `hex` saves the raw configuration to `bewave_last_raw.json`. Attach the diagnostics file to the issue.
 - **Never** send `SystemTrigger` messages (fields 1–3 restart / reset the hub) and never test on a panel
   that protects a home you are not allowed to disturb.
@@ -211,7 +221,7 @@ Enable debug logging:
 ```yaml
 logger:
   logs:
-    custom_components.bewave: debug
+    custom_components.satel_bewave: debug
 ```
 
 ## License and disclaimer

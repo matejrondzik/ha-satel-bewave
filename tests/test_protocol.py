@@ -9,7 +9,7 @@ import pathlib
 import pytest
 
 # load bewave_client.py on its own (the package __init__ needs Home Assistant)
-_P = pathlib.Path(__file__).parents[1] / "custom_components" / "bewave" / "bewave_client.py"
+_P = pathlib.Path(__file__).parents[1] / "custom_components" / "satel_bewave" / "bewave_client.py"
 _spec = importlib.util.spec_from_file_location("bewave_client", _P)
 proto = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(proto)

@@ -1,6 +1,6 @@
 # Instructions for AI assistants (Claude Code and others)
 
-This repository is a Home Assistant custom integration (`custom_components/bewave`, domain `bewave`) for
+This repository is a Home Assistant custom integration (`custom_components/satel_bewave`, domain `satel_bewave`) for
 **Satel BE WAVE** hubs and HYBRID control panels. It talks to the hub on the LAN (TCP 4200) with the
 same encrypted protobuf protocol as the Be Wave mobile app. There is no official API: everything was
 reverse-engineered, so be careful and verify on real hardware.
@@ -82,7 +82,7 @@ This code controls an **alarm system**, heating and outputs that may drive gates
 There is no simulator. If the user lets you test on their hub:
 
 - Prefer read-only checks (diagnostics, entity states) first.
-- Deploy by copying `custom_components/bewave/` to the HA `config/custom_components/bewave/` (backup first)
+- Deploy by copying `custom_components/satel_bewave/` to the HA `config/custom_components/satel_bewave/` (backup first)
   and **restart Home Assistant** - reloading the config entry does not reload Python modules.
 - Change one thing, verify the state in HA and in the Be Wave app, then continue.
 - Things you cannot verify (a physical gate, smoke, water) must be reported as untested.

@@ -69,7 +69,7 @@ You are helping a user set up a **security system**. Follow these rules:
 
 - **HACS:** HACS → ⋮ → Custom repositories → `https://github.com/matejrondzik/ha-satel-bewave`, category
   *Integration* → download → restart.
-- **Manual:** copy `custom_components/bewave/` into `<config>/custom_components/`, restart.
+- **Manual:** copy `custom_components/satel_bewave/` into `<config>/custom_components/`, restart.
 - **Add:** Settings → Devices & services → Add integration → *BE WAVE (Satel)*. The integration scans the
   network (UDP 4111) and lists the hubs found; then the login and password of a Be Wave app user with rights
   to the devices (usually the administrator). No hub found = other VLAN / broadcast blocked → enter the IP.
@@ -102,7 +102,7 @@ Entity ids are derived from device names in the user's language; rename them to 
 - Commands take ~1.5 s each (the hub drops back-to-back commands); a scene with 6 heads takes ~10 s.
 - Thermostat schedules contain only time windows; temperatures are the heads' day / night values. Changing
   the day temperature during an active window needs `climate.set_temperature` too to apply now.
-  Services: `bewave.save_schedule`, `bewave.delete_schedule`, `bewave.assign_schedule`.
+  Services: `satel_bewave.save_schedule`, `satel_bewave.delete_schedule`, `satel_bewave.assign_schedule`.
 - A mono output gives a pulse by itself - an automation only turns it on.
 - More background: [`FINDINGS.md`](FINDINGS.md).
 

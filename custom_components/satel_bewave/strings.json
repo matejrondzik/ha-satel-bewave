@@ -69,7 +69,7 @@
         },
         "data_description": {
           "mode": "Key of the protection mode on the hub. `defau` is the default mode (whole object). You can type the key of another mode configured in the Be Wave app.",
-          "developer_services": "Registers `bewave.debug_patch` and `bewave.debug_send` (raw protocol messages). Only for mapping new devices - a wrong message can restart or reset the hub."
+          "developer_services": "Registers `satel_bewave.debug_patch` and `satel_bewave.debug_send` (raw protocol messages). Only for mapping new devices - a wrong message can restart or reset the hub."
         }
       },
       "init": {

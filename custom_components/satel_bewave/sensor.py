@@ -91,7 +91,7 @@ class BeWaveSensor(CoordinatorEntity, SensorEntity):
 
 class BeWaveScenesSensor(CoordinatorEntity, SensorEntity):
     """Scenes and routines stored in the hub (state = how many; attribute `scenes` = full definitions,
-    device ids resolved to names in `device_names`). Edit them with bewave.save_scene / delete_scene / run_scene."""
+    device ids resolved to names in `device_names`). Edit them with satel_bewave.save_scene / delete_scene / run_scene."""
     _attr_has_entity_name = True
     _attr_translation_key = "scenes"
     _attr_icon = "mdi:script-text-play-outline"
@@ -125,4 +125,6 @@ class BeWaveScenesSensor(CoordinatorEntity, SensorEntity):
             for a in (sc.get("actions") or []) + (sc.get("else_actions") or []):
                 ids.update(a.get("devices") or [])
         names = {str(i): (self._hub.dev_names.get(i) or {}).get("name") for i in sorted(ids)}
-        return {"scenes": scenes, "device_names": names}
+        # shortcut_token stays internal: attributes are visible to every user and recorded in history
+        public = [{k: v for k, v in sc.items() if k != "shortcut_token"} for sc in scenes]
+        return {"scenes": public, "device_names": names}

@@ -17,4 +17,4 @@ body:
     id: logs
     attributes:
       label: Debug log and diagnostics
-      description: "Enable `logger: logs: custom_components.bewave: debug`, reproduce, attach the log and the diagnostics file."
+      description: "Enable `logger: logs: custom_components.satel_bewave: debug`, reproduce, attach the log and the diagnostics file."

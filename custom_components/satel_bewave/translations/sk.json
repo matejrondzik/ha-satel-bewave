@@ -69,7 +69,7 @@
         },
         "data_description": {
           "mode": "Kľúč režimu v ústredni. `defau` je predvolený režim (celý objekt). Môžeš zadať kľúč iného režimu nastaveného v appke Be Wave.",
-          "developer_services": "Zaregistruje `bewave.debug_patch` a `bewave.debug_send` (surové správy protokolu). Len na mapovanie nových zariadení – zlá správa môže ústredňu reštartovať alebo resetovať."
+          "developer_services": "Zaregistruje `satel_bewave.debug_patch` a `satel_bewave.debug_send` (surové správy protokolu). Len na mapovanie nových zariadení – zlá správa môže ústredňu reštartovať alebo resetovať."
         }
       },
       "init": {

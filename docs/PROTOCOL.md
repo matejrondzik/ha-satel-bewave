@@ -2,7 +2,7 @@
 
 These are working notes for contributors. They are incomplete and not official. Everything
 was observed against hubs owned by the authors. The implementation lives in
-[`custom_components/bewave/bewave_client.py`](../custom_components/bewave/bewave_client.py),
+[`custom_components/satel_bewave/bewave_client.py`](../custom_components/satel_bewave/bewave_client.py),
 which also works as a stand-alone CLI (`python3 bewave_client.py status --host … --login … --password …`).
 
 ## Transport
@@ -215,5 +215,5 @@ Actions: 0 SET_ON_OFF ("1"/"0"), 2 SET_BLOCK_UNBLOCK, 3 SET_SHUTTER_VALUE, 4 SET
 19 SET_COLOR_CONTROL_CW, 20 RUN_SCENE, 21 TRIGGER_AN_ALARM, 22 INVOKE_NOTIFICATION, 23 INVOKE_CHIME, 24 APN_CONTROL.
 The integration refuses 13, 14, 21 and 24 (arming, disarming, alarms).
 
-In Home Assistant: sensor "Scenes and routines" (attribute `scenes`) and services `bewave.save_scene`,
-`bewave.delete_scene`, `bewave.run_scene`.
+In Home Assistant: sensor "Scenes and routines" (attribute `scenes`) and services `satel_bewave.save_scene`,
+`satel_bewave.delete_scene`, `satel_bewave.run_scene`.

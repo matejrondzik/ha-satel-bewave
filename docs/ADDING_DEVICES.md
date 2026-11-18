@@ -24,12 +24,12 @@ voltage, because the integration creates those for every device. What is missing
 Only on your own system, and only with commands from the device's `options`.
 
 1. **Settings → Devices & services → BE WAVE → Configure → Developer services** (on).
-2. `bewave.debug_patch` with `device` (id from the diagnostics before anonymisation = attribute `serial`
+2. `satel_bewave.debug_patch` with `device` (id from the diagnostics before anonymisation = attribute `serial`
    or `device_id` of its entities), `command` and one value (`boolean`, `number`, `flt` or `string`).
    The response shows the raw state before and after.
 3. One patch at a time, wait for the result. If the hub closes the session the integration reconnects by
    itself; do not repeat the same command in a loop.
-4. **Never** use `bewave.debug_send` with messages you do not understand. `SystemTrigger` (34) values 1-3
+4. **Never** use `satel_bewave.debug_send` with messages you do not understand. `SystemTrigger` (34) values 1-3
    update firmware, restart or factory-reset the hub.
 5. Turn developer services off again.
 
@@ -54,6 +54,6 @@ Rules:
 
 ## 4. Test on hardware and open a pull request
 
-- Deploy `custom_components/bewave/` to Home Assistant and **restart** (a reload does not load new code).
+- Deploy `custom_components/satel_bewave/` to Home Assistant and **restart** (a reload does not load new code).
 - Check that existing entities keep their ids and that the new entity follows changes made in the app.
 - Say in the PR what you verified physically and what you could not (e.g. smoke, water, a gate).

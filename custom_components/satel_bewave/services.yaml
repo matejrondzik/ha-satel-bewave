@@ -1,7 +1,7 @@
 save_schedule:
   target:
     entity:
-      integration: bewave
+      integration: satel_bewave
       domain: climate
   fields:
     schedule_id:
@@ -22,7 +22,7 @@ save_schedule:
 delete_schedule:
   target:
     entity:
-      integration: bewave
+      integration: satel_bewave
       domain: climate
   fields:
     schedule_id:
@@ -33,7 +33,7 @@ delete_schedule:
 assign_schedule:
   target:
     entity:
-      integration: bewave
+      integration: satel_bewave
       domain: climate
   fields:
     schedule_id:

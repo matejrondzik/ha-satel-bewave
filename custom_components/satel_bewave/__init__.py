@@ -15,6 +15,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.helpers import config_validation as cv, device_registry as dr, discovery_flow
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -247,7 +248,7 @@ class BeWaveHub:
             if not pt:
                 continue
             top = {}
-            try:  # keep the last raw config / schedule list for debugging (bewave.debug_send dump)
+            try:  # keep the last raw config / schedule list for debugging (satel_bewave.debug_send dump)
                 top = proto.pb_read(pt)
                 for k in (45, 47, 51):
                     if k in top:
@@ -478,8 +479,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
 
     def _push():
-        hass.loop.call_soon_threadsafe(
-            coordinator.async_set_updated_data, {"state": hub.state})
+        # called from the keepalive thread; during shutdown the loop may already be closed
+        if hass.loop.is_closed():
+            return
+        try:
+            hass.loop.call_soon_threadsafe(
+                coordinator.async_set_updated_data, {"state": hub.state})
+        except RuntimeError:
+            pass
     hub.on_update = _push
     hub.start_keepalive()
 
@@ -495,7 +502,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         for d in hub.devices():
             if d["id"] in done_models or not d.get("model"):
                 continue
-            dev = reg.async_get_device(identifiers={(DOMAIN, f"{serial_id}_{d['id']}")})
+            ident = (DOMAIN, f"{serial_id}_{d['id']}")
+            if hasattr(reg, "async_get_device_by_identifier"):   # HA 2026.x+, identifiers are unique per entry
+                dev = reg.async_get_device_by_identifier(ident, entry.entry_id)
+            else:
+                dev = reg.async_get_device(identifiers={ident})
             if dev is None:
                 continue
             if dev.model != d["model"]:
@@ -522,7 +533,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 def _register_scene_services(hass: HomeAssistant) -> None:
-    """bewave.save_scene / delete_scene / run_scene - scenes and routines live in the hub and run there
+    """satel_bewave.save_scene / delete_scene / run_scene - scenes and routines live in the hub and run there
     (also when Home Assistant or the network is down). Arming, disarming and alarm actions are refused."""
     if hass.services.has_service(DOMAIN, "save_scene"):
         return
@@ -543,11 +554,16 @@ def _register_scene_services(hass: HomeAssistant) -> None:
     async def _save(call: ServiceCall):
         hub = _hub()
         sc = _norm(call.data["scene"])
+        # the attribute no longer exposes shortcut_token: keep the hub's own token when an existing scene is edited
+        if "shortcut_token" not in sc:
+            old = next((s for s in (hub.scenes or []) if s.get("id") == sc["id"]), None)
+            if old and old.get("shortcut_token"):
+                sc["shortcut_token"] = old["shortcut_token"]
         try:
             ok = await hass.async_add_executor_job(hub.upsert_scene, sc)
         except ValueError as err:
             return {"ok": False, "error": str(err)}
-        return {"ok": ok, "scene": sc}
+        return {"ok": ok, "scene": {k: v for k, v in sc.items() if k != "shortcut_token"}}
 
     async def _delete(call: ServiceCall):
         ok = await hass.async_add_executor_job(_hub().delete_scene, call.data["scene_id"])
@@ -588,7 +604,9 @@ def _register_debug_service(hass: HomeAssistant) -> None:
                 "before": before.get("raw"), "after": after.get("raw"),
                 "on_off": [before.get("on_off"), after.get("on_off")]}
 
-    hass.services.async_register(DOMAIN, "debug_patch", _handle,
+    # admin only: these send raw protocol messages to the alarm panel
+    async_register_admin_service(hass, DOMAIN, "debug_patch", _handle,
+                                 schema=vol.Schema({}, extra=vol.ALLOW_EXTRA),
                                  supports_response=SupportsResponse.OPTIONAL)
 
     async def _send(call: ServiceCall):
@@ -623,7 +641,8 @@ def _register_debug_service(hass: HomeAssistant) -> None:
                     out += [{"field": k, "err": fd.get(10), "hex": v.hex() if isinstance(v, bytes) else v} for v in vs]
         return {"messages": out}
 
-    hass.services.async_register(DOMAIN, "debug_send", _send, supports_response=SupportsResponse.OPTIONAL)
+    async_register_admin_service(hass, DOMAIN, "debug_send", _send, schema=vol.Schema({}, extra=vol.ALLOW_EXTRA),
+                                 supports_response=SupportsResponse.OPTIONAL)
 
 
 async def _async_reload(hass: HomeAssistant, entry: ConfigEntry) -> None:

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.0
+- **Breaking: the integration domain is now `satel_bewave`** (folder `custom_components/satel_bewave`). The old domain `bewave` is already used by another integration in HACS, and two integrations cannot share one folder. Services are renamed accordingly (`satel_bewave.save_scene`, `satel_bewave.save_schedule`, ...). See *Upgrading from 0.9* in the README.
+- The *Scenes and routines* sensor no longer exposes a scene's `shortcut_token` in its attributes (attributes are visible to every user and stored in history). `save_scene` keeps the hub's token when an existing scene is edited.
+- The developer services `debug_patch` / `debug_send` can only be called by administrators.
+- No more "Event loop is closed" error from the keepalive thread when Home Assistant shuts down.
+- Device models are looked up with `async_get_device_by_identifier` on Home Assistant versions that have it (removes a deprecation warning).
+- Includes 0.9.1 (rescan for the hub after connection failures) and 0.9.2 (MONO outputs get exactly one pulse).
+
 ## 0.9.2
 - Outputs set to MONO (pulse) mode get exactly one ON command. Before, the read-back after the command saw the output already off again, treated it as a failure and sent the command a second time, so a gate got two pulses (opened and stopped). OFF is ignored for MONO outputs.
 

@@ -1,4 +1,4 @@
-DOMAIN = "bewave"
+DOMAIN = "satel_bewave"
 
 CONF_LOGIN = "login"
 CONF_PASSWORD = "password"
@@ -7,7 +7,7 @@ CONF_SERIAL = "serial"
 CONF_DEVICE_UUID = "device_uuid"
 CONF_MODE = "mode"
 CONF_ZONE_CLASSES = "zone_classes"        # wired zone id -> binary sensor device class
-CONF_DEV_SERVICES = "developer_services"   # raw protocol services (bewave.debug_*) - off by default
+CONF_DEV_SERVICES = "developer_services"   # raw protocol services (satel_bewave.debug_*) - off by default
 
 DEFAULT_MODE = "defau"   # "default" protection mode key
 DEFAULT_PORT = 4200
